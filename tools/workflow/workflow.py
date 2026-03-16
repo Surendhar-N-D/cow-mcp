@@ -18,7 +18,7 @@ from fastmcp import Context
 
 import constants.error_constants as error_constants
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Workflow Event Categories",read_only=True))
 async def list_workflow_event_categories(ctx: Context | None = None) -> vo.WorkflowEventCategoryListVO:
     """
     Retrieve available workflow event categories.
@@ -54,7 +54,7 @@ async def list_workflow_event_categories(ctx: Context | None = None) -> vo.Workf
         logger.error("workflow event categories: {}\n".format(e))
         return vo.WorkflowEventCategoryListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Workflow Events",read_only=True))
 async def list_workflow_events(ctx: Context | None = None) -> vo.WorkflowEventListVO:
     """
     Retrieve available workflow events that can trigger workflows.
@@ -124,7 +124,7 @@ async def list_workflow_events(ctx: Context | None = None) -> vo.WorkflowEventLi
         logger.error("workflow events: {}\n".format(e))
         return vo.WorkflowEventListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Workflow Activity Types",read_only=True))
 async def list_workflow_activity_types(ctx: Context | None = None) -> List[str]:
     """
     Get available workflow activity types.
@@ -144,7 +144,7 @@ async def list_workflow_activity_types(ctx: Context | None = None) -> List[str]:
         logger.error("list_workflow_activity_types error: {}\n".format(e))
         return "Facing internal error"
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Workflow Function Categories",read_only=True))
 async def list_workflow_function_categories(ctx: Context | None = None) -> vo.WorkflowActivityCategoryListVO:
     """
     Retrieve available workflow function categories.
@@ -180,7 +180,7 @@ async def list_workflow_function_categories(ctx: Context | None = None) -> vo.Wo
         logger.error("workflow activity categories: {}\n".format(e))
         return vo.WorkflowActivityCategoryListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Workflow Functions",read_only=True))
 async def list_workflow_functions(ctx: Context | None = None) -> vo.WorkflowActivityListVO:
     """
     Retrieve available workflow functions (activities).
@@ -225,7 +225,7 @@ async def list_workflow_functions(ctx: Context | None = None) -> vo.WorkflowActi
         logger.error("workflow activities: {}\n".format(e))
         return vo.WorkflowActivityListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Workflow Rules",read_only=True))
 async def list_workflow_rules(ctx: Context | None = None) -> vo.WorkflowRuleListVO:
     """
     Retrieve available workflow rules.
@@ -283,7 +283,7 @@ async def list_workflow_rules(ctx: Context | None = None) -> vo.WorkflowRuleList
         logger.error("workflow rules: {}\n".format(e))
         return vo.WorkflowRuleListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Workflow Rule",read_only=True))
 async def fetch_workflow_rule(name: str, ctx: Context | None = None) -> vo.WorkflowRuleListVO:
     """
     Retrieve a specific workflow rule by name.
@@ -342,7 +342,7 @@ async def fetch_workflow_rule(name: str, ctx: Context | None = None) -> vo.Workf
         logger.error("fetch_workflow_rule error: {}\n".format(e))
         return vo.WorkflowRuleListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Task Readme",read_only=True))
 async def fetch_task_readme(name: str, ctx: Context | None = None) -> vo.TaskReadmeResponseVO:
     """
     Retrieve README documentation for a specific task by name.
@@ -395,7 +395,7 @@ async def fetch_task_readme(name: str, ctx: Context | None = None) -> vo.TaskRea
         logger.error("fetch_task_readme error: {}\n".format(e))
         return vo.TaskReadmeResponseVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Rule Readme",read_only=True))
 async def fetch_rule_readme(name: str, ctx: Context | None = None) -> vo.RuleReadmeResponseVO:
     """
     Retrieve README documentation for a specific rule by name.
@@ -473,7 +473,7 @@ async def fetch_rule_readme(name: str, ctx: Context | None = None) -> vo.RuleRea
         logger.error("fetch_rule_readme error: {}\n".format(e))
         return vo.RuleReadmeResponseVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Workflow Tasks",read_only=True))
 async def list_workflow_tasks(ctx: Context | None = None) -> vo.WorkflowTaskListVO:
     """
     Retrieve available workflow tasks.
@@ -516,7 +516,7 @@ async def list_workflow_tasks(ctx: Context | None = None) -> vo.WorkflowTaskList
         logger.error("prebuild tasks error: {}\n".format(e))
         return vo.WorkflowTaskListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Workflow Condition Categories",read_only=True))
 async def list_workflow_condition_categories(ctx: Context | None = None) -> vo.WorkflowConditionCategoryListVO:
     """
     Retrieve available workflow condition categories.
@@ -552,7 +552,7 @@ async def list_workflow_condition_categories(ctx: Context | None = None) -> vo.W
         logger.error("workflow condition categories: {}\n".format(e))
         return vo.WorkflowConditionCategoryListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Workflow Conditions",read_only=True))
 async def list_workflow_conditions(ctx: Context | None = None) -> vo.WorkflowConditionListVO:
     """
     Retrieve available workflow conditions.
@@ -595,7 +595,7 @@ async def list_workflow_conditions(ctx: Context | None = None) -> vo.WorkflowCon
         logger.error("workflow conditions: {}\n".format(e))
         return vo.WorkflowConditionListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Workflow Resource Data",read_only=True))
 async def fetch_workflow_resource_data(resource: str, ctx: Context | None = None) -> dict | str:
     """
     Fetch workflow resource data for a given resource type.
@@ -626,7 +626,7 @@ async def fetch_workflow_resource_data(resource: str, ctx: Context | None = None
         logger.error("list_user_blocks error: {}\n".format(e))
         return "Facing internal error"
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Create Workflow",read_only=False))
 async def create_workflow(workflow_yaml: str, ctx: Context | None = None) -> str:
     """
     Create a new workflow using YAML definition. Always display the workflow diagram. 
@@ -779,7 +779,7 @@ async def create_workflow(workflow_yaml: str, ctx: Context | None = None) -> str
         logger.error("create_workflow: {}\n".format(e))
         return "Facing internal error"
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Workflows",read_only=True))
 async def list_workflows(ctx: Context | None = None) -> list | str:
     """
     Retrieve a list of all available workflow configurations.
@@ -816,7 +816,7 @@ async def list_workflows(ctx: Context | None = None) -> list | str:
         return "Facing internal error"
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Get Workflow By Name",read_only=True))
 async def get_workflow_by_name(name: str, ctx: Context | None = None) -> dict | str:
     """
         Get a workflow configuration by its name (exact, case-sensitive match).
@@ -845,7 +845,7 @@ async def get_workflow_by_name(name: str, ctx: Context | None = None) -> dict | 
         logger.error("get_workflow_by_name: {}\n".format(e))
         return "Facing internal error"
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Workflow Details",read_only=True))
 async def fetch_workflow_details(id:str, ctx: Context | None = None) -> dict | str:
     """
         Args:
@@ -866,7 +866,7 @@ async def fetch_workflow_details(id:str, ctx: Context | None = None) -> dict | s
         logger.error("fetch_workflow_details: {}\n".format(e))
         return "Facing internal error"
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Update Workflow Summary",read_only=False))
 async def update_workflow_summary(id:str,summary:str, ctx: Context | None = None) -> dict | str:
     """
         Args:
@@ -895,7 +895,7 @@ async def update_workflow_summary(id:str,summary:str, ctx: Context | None = None
         logger.error("update_workflow_summary: {}\n".format(e))
         return "Facing internal error"
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Update Workflow Mermaid Diagram",read_only=False))
 async def update_workflow_mermaid_diagram(id:str,mermaidDiagram:str, ctx: Context | None = None) -> dict | str:
     """
         Args:
@@ -924,7 +924,7 @@ async def update_workflow_mermaid_diagram(id:str,mermaidDiagram:str, ctx: Contex
         logger.error("update_workflow_mermaid_diagram: {}\n".format(e))
         return "Facing internal error"
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Modify Workflow",read_only=False))
 async def modify_workflow(workflow_yaml: str, workflow_id: str, ctx: Context | None = None) -> str:
     """
     Modify an existing workflow using YAML definition.
@@ -978,7 +978,7 @@ async def modify_workflow(workflow_yaml: str, workflow_id: str, ctx: Context | N
         logger.error("modify_workflow: {}\n".format(e))
         return "Facing internal error"
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Workflow Predefined Variables",read_only=True))
 async def list_workflow_predefined_variables(ctx: Context | None = None) -> vo.WorkflowPredefinedVariableListVO:
     """
     Retrieve available predefined variables for workflow configuration.
@@ -1020,7 +1020,7 @@ async def list_workflow_predefined_variables(ctx: Context | None = None) -> vo.W
         return vo.WorkflowPredefinedVariableListVO(error="Facing internal error")
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Create Workflow Custom Event",read_only=False))
 async def create_workflow_custom_event(
     displayable: str,
     desc: str,
@@ -1107,7 +1107,7 @@ async def create_workflow_custom_event(
         logger.error("create_workflow_custom_event: {}\n".format(e))
         return "Facing internal error"
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Trigger Workflow",read_only=False))
 async def trigger_workflow(
     workflowConfigId: str,
     event: str,

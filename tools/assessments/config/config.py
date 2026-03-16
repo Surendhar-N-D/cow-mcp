@@ -8,7 +8,7 @@ from constants import constants
 from mcptypes import assessment_config_tool_types as vo
 from fastmcp import Context
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List All Assessment Categories",read_only=True))
 async def list_all_assessment_categories(ctx: Context | None = None) -> vo.CategoryListVO:
     """
         Get all assessment categories
@@ -43,7 +43,7 @@ async def list_all_assessment_categories(ctx: Context | None = None) -> vo.Categ
         logger.error("list_all_assessment_categories error: {}\n".format(e))
         return vo.CategoryListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Assessments",read_only=True))
 async def list_assessments(categoryId: str = "", categoryName: str = "", assessmentName: str = "", ctx: Context | None = None) -> vo.AssessmentListVO:
     """
         Get all assessments

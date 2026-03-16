@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Recent Assessment Runs",read_only=True))
 async def fetch_recent_assessment_runs(id: str, ctx: Context | None = None) -> vo.AssessmentRunListVO:
     """
         Get recent assessment run for given assessment id
@@ -82,7 +82,7 @@ async def fetch_recent_assessment_runs(id: str, ctx: Context | None = None) -> v
         logger.error("fetch_recent_assessment_runs error: {}\n".format(e))
         return vo.AssessmentRunListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Assessment Runs",read_only=True))
 async def fetch_assessment_runs(id: str, page: int=1, pageSize: int=0, ctx: Context | None = None) -> vo.AssessmentRunListVO:
     """
         Get all assessment run for given assessment id
@@ -165,7 +165,7 @@ async def fetch_assessment_runs(id: str, page: int=1, pageSize: int=0, ctx: Cont
         logger.error("fetch_assessment_runs error: {}\n".format(e))
         return vo.AssessmentRunListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Assessment Run Details",read_only=True))
 async def fetch_assessment_run_details(id: str, ctx: Context | None = None) -> vo.ControlListVO:
     """
         Get assessment run details for given assessment run id. This api will return many contorls, use page to get details pagewise.
@@ -216,7 +216,7 @@ async def fetch_assessment_run_details(id: str, ctx: Context | None = None) -> v
         logger.error("fetch_assessment_run_details error: {}\n".format(e))
         return vo.ControlVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Assessment Run Leaf Controls",read_only=True))
 async def fetch_assessment_run_leaf_controls(id: str, ctx: Context | None = None) ->  vo.ControlListVO:
     """
         Get leaf controls for given assessment run id.
@@ -268,7 +268,7 @@ async def fetch_assessment_run_leaf_controls(id: str, ctx: Context | None = None
         logger.error("fetch_assessment_run_leaf_controls error: {}\n".format(e))
         return vo.ControlListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Run Controls",read_only=True))
 async def fetch_run_controls(name: str, ctx: Context | None = None) -> vo.ControlListVO:
     """
         use this tool when you there is no result from the tool "execute_cypher_query".
@@ -320,7 +320,7 @@ async def fetch_run_controls(name: str, ctx: Context | None = None) -> vo.Contro
         logger.error("fetch_run_controls error: {}\n".format(e))
         return vo.ControlListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Run Control Metadata",read_only=True))
 async def fetch_run_control_meta_data(id: str, ctx: Context | None = None) -> vo.ControlMetadataVO:
     """
     Use this tool to retrieve control metadata for a given `control_id`, including:
@@ -359,7 +359,7 @@ async def fetch_run_control_meta_data(id: str, ctx: Context | None = None) -> vo
 
 
 # had to check whether this leaf control is required or not
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Assessment Run Leaf Control Evidence",read_only=True))
 async def fetch_assessment_run_leaf_control_evidence(id: str, ctx: Context | None = None) -> vo.ControlEvidenceListVO:
     """
         Get leaf control evidence for given assessment run control id.
@@ -394,7 +394,7 @@ async def fetch_assessment_run_leaf_control_evidence(id: str, ctx: Context | Non
         return vo.ControlEvidenceListVO(error="Facing internal error")
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Controls",read_only=True))
 async def fetch_controls(control_name:str = "", ctx: Context | None = None) -> vo.ControlPromptVO:
     """
     To fetch controls.
@@ -432,7 +432,7 @@ def generate_cypher_query_for_control(control_name: str =  "", unique_nodes: str
         """)
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Evidence Records",read_only=True))
 async def fetch_evidence_records(id: str, compliantStatus: str = "", ctx: Context | None = None) -> vo.RecordListVO:
     """
     Get evidence records for a given evidence ID with optional compliance status filtering.
@@ -542,7 +542,7 @@ async def fetch_evidence_records(id: str, compliantStatus: str = "", ctx: Contex
         logger.error("fetch_evidence_records error: {}\n".format(e))
         return vo.RecordListVO(error="Facing internal error")
     
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Evidence Record Schema",read_only=True))
 async def fetch_evidence_record_schema(id: str, ctx: Context | None = None) -> vo.RecordSchemaListVO:
     """
     Get evidence record schema for a given evidence ID.
@@ -589,7 +589,7 @@ async def fetch_evidence_record_schema(id: str, ctx: Context | None = None) -> v
         logger.error("fetch_evidence_record_schema error: {}\n".format(e))
         return vo.RecordSchemaListVO(error="Facing internal error")       
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Available Control Actions",read_only=True))
 async def fetch_available_control_actions(assessmentName: str, controlNumber: str = "", controlAlias: str = "", evidenceName: str = "", ctx: Context | None = None) -> vo.RecordListVO:
     """
         This tool should be used for handling control-related actions such as create, update, or to retrieve available actions for a given control.
@@ -657,7 +657,7 @@ async def fetch_available_control_actions(assessmentName: str, controlNumber: st
         logger.error("fetch_available_control_actions error: {}\n".format(e))
         return vo.ActionsListVO(error="Facing internal error")
     
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Assessment Available Actions",read_only=True))
 async def fetch_assessment_available_actions(name: str = "", ctx: Context | None = None) -> vo.RecordListVO:
     """
         Get **actions available on assessment** for given assessment name. 
@@ -710,7 +710,7 @@ async def fetch_assessment_available_actions(name: str = "", ctx: Context | None
         return vo.ActionsListVO(error="Facing internal error")
     
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Evidence Available Actions",read_only=True))
 async def fetch_evidence_available_actions(assessment_name: str = "", control_number: str="", control_alias: str ="", evidence_name: str ="", ctx: Context | None = None) -> vo.ActionsListVO:
     """
         Get actions available on evidence for given evidence name. 
@@ -769,7 +769,7 @@ async def fetch_evidence_available_actions(assessment_name: str = "", control_nu
         logger.error("fetch_evidence_available_actions error: {}\n".format(e))
         return vo.ActionsListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch General Available Actions",read_only=True))
 async def fetch_general_available_actions(type: str = "", ctx: Context | None = None) -> vo.ActionsListVO:
     """
         Get general actions available on assessment, control & evidence. 
@@ -823,7 +823,7 @@ async def fetch_general_available_actions(type: str = "", ctx: Context | None = 
         logger.error("fetch_evidence_available_actions error: {}\n".format(e))
         return vo.ActionsListVO(error="Facing internal error")
      
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Automated Controls Of An Assessment",read_only=True))
 async def fetch_automated_controls_of_an_assessment(assessment_id: str = "", ctx: Context | None = None) -> vo.AutomatedControlListVO:
     
     """
@@ -878,7 +878,7 @@ async def fetch_automated_controls_of_an_assessment(assessment_id: str = "", ctx
         return vo.AutomatedControlListVO(error="Facing internal error")
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Execute Action",read_only=False))
 async def execute_action(assessmentId: str, assessmentRunId: str, actionBindingId: str , assessmentRunControlId: str="", assessmentRunControlEvidenceId: str="", evidenceRecordIds: List[str]=[], inputs: dict[str, Any] = None, ctx: Context | None = None) -> vo.TriggerActionVO:
     """
         Use this tool when the user asks about actions such as create, update or other action-related queries.

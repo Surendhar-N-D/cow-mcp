@@ -1,6 +1,8 @@
 from mcpconfig.config import mcp
+from utils import utils
 
-@mcp.tool()
+
+@mcp.tool(annotations=utils.tool_annotations("Help",read_only=True))
 def help(category: str = "all") -> str:
     """
     Important: This tool should execute when user asks for help or guidance on using ComplianceCow functions.

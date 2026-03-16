@@ -19,7 +19,7 @@ from mcptypes.graph_tool_types import UniqueNodeDataVO
 from mcptypes.assistant_tool_types import ControlSourceSummaryResponseVO, ControlSourceSummaryVO
 from fastmcp import Context
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Create Assessment",read_only=False))
 async def create_assessment(yaml_content: str, ctx: Context | None = None) -> dict:
     """
     Create a new assessment from YAML definition.
@@ -191,7 +191,7 @@ async def create_assessment(yaml_content: str, ctx: Context | None = None) -> di
 
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Suggest Control Citations",read_only=True))
 async def suggest_control_config_citations(
     controlName: str,
     assessmentId: str,
@@ -330,7 +330,7 @@ async def suggest_control_config_citations(
         return {"success": False, "error": f"Unexpected error suggesting control citations: {e}"}
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Assessments",read_only=True))
 async def list_assessments(
     categoryId: str = "",
     categoryName: str = "",
@@ -392,7 +392,7 @@ async def list_assessments(
         return assessment_vo.AssessmentListVO(error="Facing internal error")
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Assessment Controls",read_only=True))
 async def list_assessment_control_configs(
     assessmentId: str,
     ctx: Context | None = None
@@ -588,7 +588,7 @@ async def create_control_config(
         return {"success": False, "error": f"Unexpected error creating control: {e}"}
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Attach Citation To Control",read_only=False))
 async def attach_citation_to_control_config(
     assessmentId: str,
     controlId: str,
@@ -789,7 +789,7 @@ async def attach_citation_to_control_config(
         logger.error("attach_citation_to_control_config error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error attaching citation to control: {e}"}
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Create SQL Query Evidence",read_only=False))
 async def create_sql_query_evidence(
     controlConfigId: str,
     sqlquery: str,
@@ -948,7 +948,7 @@ async def create_sql_query_evidence(
         logger.error("create_sql_query_evidence error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error creating SQL query: {e}"}
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List SQL Query Evidence",read_only=True))
 async def list_sql_query_evidence(
     controlConfigId: str,
     ctx: Context | None = None
@@ -1012,7 +1012,7 @@ async def list_sql_query_evidence(
         logger.error("list_sql_query_evidence error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error listing SQL query evidences: {e}"}
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Update SQL Query Evidence",read_only=False))
 async def update_sql_query_evidence(
     controlConfigId: str,
     evidenceId: str,
@@ -1151,7 +1151,7 @@ async def update_sql_query_evidence(
         logger.error("update_sql_query_evidence error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error updating SQL query evidence: {e}"}
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Control Source Summary",read_only=True))
 async def fetch_control_source_summary(controlId: str, ctx: Context | None = None) -> ControlSourceSummaryResponseVO:
     """
     Fetch aggregated source summary for a control config, including linked control configs, evidences (including schema), and lineage depth.
@@ -1253,7 +1253,7 @@ async def fetch_control_source_summary(controlId: str, ctx: Context | None = Non
             error=f"Unexpected error fetching control source summary: {e}",
         )
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Get Evidence Sample Data",read_only=True))
 async def get_evidence_sample_data(controlConfigId: str, evidenceNames: List[str] | None = None, records: int = 3, ctx: Context | None = None) -> dict:
     """
     Fetch concrete evidence samples for a control config.
@@ -1349,7 +1349,7 @@ async def get_evidence_sample_data(controlConfigId: str, evidenceNames: List[str
         logger.error("get_evidence_sample_data error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error fetching evidence samples: {e}"}
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Get Entity Hierarchy",read_only=True))
 async def get_entity_hierarchy(ctx: Context | None = None) -> dict:
     """
     Use this tool when the user wants to automate control operations,
@@ -1391,7 +1391,7 @@ async def get_entity_hierarchy(ctx: Context | None = None) -> dict:
         logger.error("get_entity_hierarchy error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error fetching entity hierarchy: {e}"}
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Create Control Note",read_only=False))
 async def create_control_config_note(
     controlConfigId: str,
     assessmentId: str,
@@ -1531,7 +1531,7 @@ async def create_control_config_note(
         logger.error("create_control_config_note error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error creating control config note: {e}"}
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Control Notes",read_only=True))
 async def list_control_config_notes(
     controlConfigId: str,
     ctx: Context | None = None
@@ -1604,7 +1604,7 @@ async def list_control_config_notes(
         logger.error("list_control_config_notes error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error listing control config notes: {e}"}
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Update Control Note",read_only=False))
 async def update_control_config_note(
     controlConfigId: str,
     noteId: str,
@@ -1734,7 +1734,7 @@ async def update_control_config_note(
         logger.error("update_control_config_note error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error updating control config note: {e}"}
     
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Rule Readme",read_only=True))
 async def fetch_rule_readme(name: str, ctx: Context | None = None) -> workflow_vo.RuleReadmeResponseVO:
     """
     Use this tool to get details about the rule to add in SQL query control config notes.
@@ -1814,7 +1814,7 @@ async def fetch_rule_readme(name: str, ctx: Context | None = None) -> workflow_v
         logger.error("fetch_rule_readme error: {}\n".format(e))
         return workflow_vo.RuleReadmeResponseVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Validate SQL Query",read_only=True))
 async def validate_sql_query(
     sqlQuery: str,
     referenceEvidences: List[dict],
@@ -2118,7 +2118,7 @@ async def fetch_sql_query_feedback(
         return {"success": False, "error": f"Unexpected error validating SQL query: {e}"}
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Mark Control Ready For Execution",read_only=False))
 async def mark_control_ready_for_execution(
     assessmentId: str,
     assessmentName: str,
@@ -2219,7 +2219,7 @@ async def mark_control_ready_for_execution(
         return {"success": False, "error": f"Unexpected error marking control ready: {e}"}
     
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Get Context Tables",read_only=True))
 async def get_context_tables(controlId: str, ctx: Context | None = None) -> dict:
     """
     Get flattened context tables for:
@@ -2372,7 +2372,7 @@ async def get_context_tables(controlId: str, ctx: Context | None = None) -> dict
             "error": f"Unexpected error fetching context tables: {e}"
         }
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Create Control Config",read_only=False))
 async def create_control_config(
     assessmentName: str,
     controlObjectiveName: str,
@@ -2504,7 +2504,7 @@ async def create_control_config(
         }
     
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Update Control Config Contexts",read_only=False))
 async def update_control_config_contexts(
     controlConfigId: str,
     entityClass: str,

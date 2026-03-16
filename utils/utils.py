@@ -14,6 +14,14 @@ from mcptypes.error_type import ErrorVO,ErrorResponseVO,ErrorWorkflowVO
 import re
 
 
+def tool_annotations(title: str, read_only: bool) -> dict:
+    return {
+        "title": title,
+        "readOnlyHint": read_only,
+        "destructiveHint": not read_only,
+    }
+
+
 async def make_API_call_to_CCow_and_get_response(uriSuffix: str,method: str,request_body: dict | list | str = None, type: str = "json",return_raw: bool = False, ctx: Context | None = None):
     logger.info(f"uriSuffix: {uriSuffix}, Method: {method}, Type: {type}")
     async with httpx.AsyncClient() as client:

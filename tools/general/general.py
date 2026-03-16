@@ -15,7 +15,7 @@ from fastmcp import Context
 mcp_tools_to_be_included = os.getenv("MCP_TOOLS_TO_BE_INCLUDED", "").lower().strip()
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Read File",read_only=True))
 def read_file(uri: str, max_chars: int = 8000) -> dict:
     """
     Read content from a local file given a file:// URI or file path.
@@ -86,7 +86,7 @@ def read_file(uri: str, max_chars: int = 8000) -> dict:
     except Exception as e:
         return {"error": f"Failed to read file: {str(e)}", "uri": uri}
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Read Resource",read_only=True))
 def read_resource(uri: str, max_chars: int = 8000) -> dict:
     """
     Read content from a resource URI (primarily for local files).

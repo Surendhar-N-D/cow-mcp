@@ -15,7 +15,7 @@ from mcptypes import assets_tools_type as vo
 from fastmcp import Context
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Assets",read_only=True))
 async def list_assets(ctx: Context | None = None) -> vo.AssetListVO:
     """
         Get all assets
@@ -49,7 +49,7 @@ async def list_assets(ctx: Context | None = None) -> vo.AssetListVO:
         logger.error("list_assets error: {}\n".format(e))
         return vo.AssetListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Assets Summary",read_only=True))
 async def fetch_assets_summary(id: str, ctx: Context | None = None) -> vo.AssestsSummaryVO:
     """
         Get assets summary for given assessment id
@@ -85,7 +85,7 @@ async def fetch_assets_summary(id: str, ctx: Context | None = None) -> vo.Assest
         logger.error("fetch_assets_summary error: {}\n".format(e))
         return vo.AssestsSummaryVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Resource Types",read_only=True))
 async def fetch_resource_types(id: str, page: int=1, pageSize: int=0, ctx: Context | None = None) -> dict:
     """
         Get resource types for given asset run id.
@@ -142,7 +142,7 @@ async def fetch_resource_types(id: str, page: int=1, pageSize: int=0, ctx: Conte
         logger.error("fetch_resource_types error: {}\n".format(e))
         return vo.ResourceTypeListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Checks",read_only=True))
 async def fetch_checks(id: str, resourceType: str, page: int=1, pageSize: int=0, complianceStatus: str="", ctx: Context | None = None) -> vo.ChecksListVO:
     """
         Get checks for given assets run id and resource type. Use this function to get all checks for given assets run id and resource type
@@ -220,7 +220,7 @@ async def fetch_checks(id: str, resourceType: str, page: int=1, pageSize: int=0,
         logger.error("fetch_checks error: {}\n".format(e))
         return vo.ChecksListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Resources",read_only=True))
 async def fetch_resources(id: str, resourceType: str, page: int=1, pageSize: int=0, complianceStatus: str="", ctx: Context | None = None) -> vo.ResourceListVO:
     """
         Get resources for given asset run id and resource type
@@ -301,7 +301,7 @@ async def fetch_resources(id: str, resourceType: str, page: int=1, pageSize: int
         logger.error("fetch_resources error: {}\n".format(e))
         return vo.ResourceListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Resources By Check Name",read_only=True))
 async def fetch_resources_by_check_name(id: str,  checkName: str, page: int=1, pageSize: int=0, ctx: Context | None = None) -> vo.ResourceListVO:
     """
         Get resources for given asset run id, and check name.
@@ -421,7 +421,7 @@ async def fetch_resource_types_summary(id: str, ctx: Context | None = None) -> d
         logger.error("fetch_resource_types_summary error: {}\n".format(e))
         return vo.ResourceListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Checks Summary",read_only=True))
 async def fetch_checks_summary(id: str, resourceType: str, ctx: Context | None = None) -> vo.CheckSummaryVO:
     """
         Use this to get the summary on checks
@@ -464,7 +464,7 @@ async def fetch_checks_summary(id: str, resourceType: str, ctx: Context | None =
         logger.error("fetch_checks_summary error: {}\n".format(e))
         return vo.CheckSummaryVO(error="Facing internal error")
     
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Resources Summary",read_only=True))
 async def fetch_resources_summary(id: str, resourceType: str, ctx: Context | None = None) -> vo.ResourceSummaryVO:
     """
         Use this to get the summary on resource 
@@ -507,7 +507,7 @@ async def fetch_resources_summary(id: str, resourceType: str, ctx: Context | Non
         logger.error("fetch_resources_summary error: {}\n".format(e))
         return vo.ResourceSummaryVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Resources By Check Name Summary",read_only=True))
 async def fetch_resources_by_check_name_summary(id: str, resourceType: str, check: str, ctx: Context | None = None) -> vo.ResourceSummaryVO:
     """
         Use this to get the summary on check resources 

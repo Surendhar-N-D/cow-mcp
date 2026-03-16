@@ -13,7 +13,7 @@ from constants import constants
 from fastmcp import Context
 
 
-@mcp.tool(name="fetch_unique_node_data_and_schema",description="Fetch unique node data and schema")
+@mcp.tool(name="fetch_unique_node_data_and_schema",description="Fetch unique node data and schema",annotations=utils.tool_annotations("Fetch Unique Node Data And Schema",read_only=True))
 async def fetch_unique_node_data_and_schema(question: str, ctx: Context | None = None) -> UniqueNodeDataVO:
 
     """
@@ -53,7 +53,7 @@ async def fetch_unique_node_data_and_schema(question: str, ctx: Context | None =
 
 
 
-@mcp.tool() 
+@mcp.tool(annotations=utils.tool_annotations("Execute Cypher Query",read_only=False)) 
 async def execute_cypher_query(query: str, ctx: Context | None = None) -> CypherQueryVO: 
     """
     Given a question and query, execute a cypher query and transform result to human readable format.

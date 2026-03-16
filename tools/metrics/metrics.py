@@ -24,7 +24,9 @@ import constants.error_constants as error_constants
 from mcptypes.graph_tool_types import UniqueNodeDataVO , CypherQueryVO
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Get Metrics Assessment",read_only=True)
+)
 async def get_metrics_assessment(ctx: Context | None = None) -> dict:
     """
     Get metrics assessment
@@ -41,7 +43,6 @@ async def get_metrics_assessment(ctx: Context | None = None) -> dict:
         logger.info("get_metrics_assessment:\n")
 
         METRICS_ASSESSMENT_NAME = os.getenv("METRICS_ASSESSMENT_NAME", "Metric Manager").strip()
-
         METRICS_CATEGORY_NAME = os.getenv("METRICS_CATEGORY_NAME", "Metric Manager").strip()
 
         url = f"{constants.URL_PLANS}?fields=basic&name={METRICS_ASSESSMENT_NAME}"
@@ -77,9 +78,8 @@ async def get_metrics_assessment(ctx: Context | None = None) -> dict:
         if assessment is not None:
             return {"success": True, "data": assessment}
         
-        else :   
+        else:
             logger.error("get_metrics_assessment error: No assessment found with name {}\n".format(METRICS_ASSESSMENT_NAME))
-
 
             category_create_payload = {
                 "name" : METRICS_CATEGORY_NAME
@@ -94,7 +94,6 @@ async def get_metrics_assessment(ctx: Context | None = None) -> dict:
                 logger.error("get_metrics_assessment create_category_error: {}\n".format(error))
                 if isinstance(resp, dict) and create_category.get("Description") != "category name already exists":
                     return error
-
 
             payload = {
                 "name": METRICS_ASSESSMENT_NAME,
@@ -131,7 +130,10 @@ async def get_metrics_assessment(ctx: Context | None = None) -> dict:
         logger.error("get_metrics_assessment error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error: {e}"}
 
-@mcp.tool()
+
+@mcp.tool(
+    annotations=utils.tool_annotations("List Assets",read_only=True)
+)
 async def list_assets(ctx: Context | None = None) -> dict:
     """
         Get all assets
@@ -169,7 +171,9 @@ async def list_assets(ctx: Context | None = None) -> dict:
         logger.error("list_assets error: {}\n".format(e))
         return assets_vo.AssetListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Get Assets Data",read_only=True)
+)
 async def get_assets_data(assetId: str , ctx: Context | None = None) -> dict:
     """
     Get controls and evidence metadata for one asset (no sample data).
@@ -341,7 +345,9 @@ async def get_assets_data(assetId: str , ctx: Context | None = None) -> dict:
         logger.error("get_assets_data error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error: {e}"}
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Get Asset Metrics Evidence Sample Data",read_only=True)
+)
 async def get_asset_metrics_evidence_sample_data(
     assetId: str,
     metricsIds: List[str],
@@ -513,7 +519,9 @@ async def get_asset_metrics_evidence_sample_data(
         logger.error("get_asset_metrics_evidence_sample_data error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error: {e}"}
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Run Metrics Assessment",read_only=False)
+)
 async def run_metrics_assessment(
     metrics_assessment_id: str,
     name: str,
@@ -581,7 +589,9 @@ async def run_metrics_assessment(
         logger.error("run_metrics_assessment error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error: {e}"}
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("List Recent Metrics Assessment Runs",read_only=True)
+)
 async def get_all_recent_assessment_run_details(
     assessmentMetricsId: str,
     ctx: Context | None = None
@@ -645,7 +655,9 @@ async def get_all_recent_assessment_run_details(
         logger.error("get_all_recent_run_details error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error: {e}"}
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Get Metrics Assessment Run Details",read_only=True)
+)
 async def get_all_metrics_of_run(
     assessmentMetricsRunId: str,
     assessmentMetricsId: str,
@@ -755,7 +767,9 @@ async def get_all_metrics_of_run(
         logger.error("get_all_metrics_of_run error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error: {e}"}
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Add Metric",read_only=False)
+)
 async def add_metric(assessmentMetricsId: str,categoryName: str, descrition: str, ctx: Context | None = None) -> dict:
     """
     Add a metric to an assessment under the best matching category.
@@ -817,7 +831,9 @@ async def add_metric(assessmentMetricsId: str,categoryName: str, descrition: str
         return {"success": False, "error": f"Unexpected error: {e}"}
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Update Metric",read_only=False)
+)
 async def update_metric(assessmentMetricsId: str,metricsId: str, descrition: str, ctx: Context | None = None) -> dict:
     """
     Update an existing metric definition (name/description).
@@ -835,7 +851,7 @@ async def update_metric(assessmentMetricsId: str,metricsId: str, descrition: str
         logger.info("update_metric:\n")
 
         assessmentMetricsId = (assessmentMetricsId or "").strip()
-        categoryName = (categoryName or "").strip()
+        metricsId = (metricsId or "").strip()
         descrition = (descrition or "").strip()
 
         err = utils.require_fields(locals(), ["assessmentMetricsId", "metricsId", "descrition"])
@@ -877,7 +893,9 @@ async def update_metric(assessmentMetricsId: str,metricsId: str, descrition: str
         logger.error("update_metric error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error: {e}"}
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("List Metric Categories",read_only=True)
+)
 async def get_all_metrics_categories(
     assessmentMetricsId: str,
     ctx: Context | None = None,
@@ -956,7 +974,9 @@ async def get_all_metrics_categories(
         return {"success": False, "error": f"Unexpected error: {e}"}
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("List Assessment Metrics",read_only=True)
+)
 async def get_all_assessment_metrics(
     assessmentMetricsId: str,
     ctx: Context | None = None,
@@ -1036,7 +1056,9 @@ async def get_all_assessment_metrics(
         return {"success": False, "error": f"Unexpected error: {e}"}
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Suggest Metric Citations",read_only=True)
+)
 async def suggest_metrics_citations(
     metricName: str,
     assessmentMetricsId: str,
@@ -1159,7 +1181,9 @@ async def suggest_metrics_citations(
         return {"success": False, "error": f"Unexpected error: {e}"}
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Attach Citation To Metric",read_only=False)
+)
 async def attach_citation_to_metrics(
     assessmentMetricsId: str,
     metricsId: str,
@@ -1312,7 +1336,9 @@ async def attach_citation_to_metrics(
         return {"success": False, "error": f"Unexpected error: {e}"}
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Fetch Metric Source Summary",read_only=True)
+)
 async def fetch_metrics_source_summary(
     metricsId: str,
     ctx: Context | None = None,
@@ -1404,7 +1430,9 @@ async def fetch_metrics_source_summary(
         return MetricsSourceSummaryResponseVO(success=False, error=f"Unexpected error: {e}").model_dump()
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Get Metric Evidence Samples",read_only=True)
+)
 async def get_metrics_evidence_sample_data(
     metricsId: str,
     evidenceNames: List[str] | None = None,
@@ -1485,7 +1513,9 @@ async def get_metrics_evidence_sample_data(
         return {"success": False, "error": f"Unexpected error: {e}"}
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Validate SQL Query And CEL",read_only=True)
+)
 async def validate_sql_query_and_cel(
     sqlQuery: str,
     referenceEvidences: List[dict],
@@ -1650,7 +1680,9 @@ async def validate_sql_query_and_cel(
         logger.error("validate_metrics_sql_query error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error: {e}"}
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Create SQL Query Evidence",read_only=False)
+)
 async def create_sql_query_evidence(
     metricsId: str,
     sqlquery: str,
@@ -1800,7 +1832,9 @@ async def create_sql_query_evidence(
         logger.error("create_sql_query_evidence error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error creating SQL query: {e}"}
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("List SQL Query Evidence",read_only=True)
+)
 async def list_sql_query_evidence(
     metricsId: str,
     ctx: Context | None = None
@@ -1864,7 +1898,9 @@ async def list_sql_query_evidence(
         logger.error("list_sql_query_evidence error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error listing SQL query evidences: {e}"}
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Update SQL Query Evidence",read_only=False)
+)
 async def update_sql_query_evidence(
     metricsId: str,
     evidenceId: str,
@@ -1999,7 +2035,9 @@ async def update_sql_query_evidence(
 
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Add CEL Expressions To Metric",read_only=False)
+)
 async def add_cel_expression_to_metrics(
     metricsId: str,
     metricsEvidenceId  :str,
@@ -2023,6 +2061,8 @@ async def add_cel_expression_to_metrics(
             return {"success": False, "error": "filteringExpression is required"}
         if not compliant_expression:
             return {"success": False, "error": "compliantExpression is required"}
+        if not metricsEvidenceId or not str(metricsEvidenceId).strip():
+            return {"success": False, "error": "metricsEvidenceId is required"}
 
         payload = [
             {
@@ -2078,7 +2118,9 @@ async def add_cel_expression_to_metrics(
         return {"success": False, "error": f"Unexpected error: {e}"}
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Update CEL Expressions On Metric",read_only=False)
+)
 async def update_cel_expression_to_metrics(
     metricsId: str,
     metricsEvidenceId  :str,
@@ -2102,6 +2144,8 @@ async def update_cel_expression_to_metrics(
             return {"success": False, "error": "filteringExpression is required"}
         if not compliant_expression:
             return {"success": False, "error": "compliantExpression is required"}
+        if not metricsEvidenceId or not str(metricsEvidenceId).strip():
+            return {"success": False, "error": "metricsEvidenceId is required"}
 
         payload = [
             {
@@ -2158,7 +2202,9 @@ async def update_cel_expression_to_metrics(
 
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Get CEL Expressions For Metric",read_only=True)
+)
 async def get_cel_expression_for_metrics(metricsId: str,evidenceId:str, ctx: Context | None = None) -> dict:
     """
     Get CEL expressions of an existing metric.
@@ -2210,7 +2256,9 @@ async def get_cel_expression_for_metrics(metricsId: str,evidenceId:str, ctx: Con
         logger.error("get_cel_expression_for_metrics error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error: {e}"}
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Create Metric Note",read_only=False)
+)
 async def create_metrics_note(
     metricsId: str,
     assessmentMetricsId: str,
@@ -2345,7 +2393,9 @@ async def create_metrics_note(
         return {"success": False, "error": f"Unexpected error creating metrics note: {e}"}
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("List Metric Notes",read_only=True)
+)
 async def list_metrics_notes(
     metricsId: str,
     ctx: Context | None = None
@@ -2407,7 +2457,9 @@ async def list_metrics_notes(
         logger.error("list_metrics_notes error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error listing metrics notes: {e}"}
 
-@mcp.tool()
+@mcp.tool(
+    annotations=utils.tool_annotations("Update Metric Note",read_only=False)
+)
 async def update_metrics_note(
     metricsId: str,
     noteId: str,
@@ -2538,7 +2590,9 @@ async def update_metrics_note(
         return {"success": False, "error": f"Unexpected error updating metrics note: {e}"}
  
 
-@mcp.tool() 
+@mcp.tool(
+    annotations=utils.tool_annotations("Link Source Metrics To Target Metric",read_only=False)
+) 
 async def link_source_metrics_to_target_metric(sourceMetricsIds: list[str], targetMetricId: str, ctx: Context | None = None) -> dict: 
     """
     Args:
