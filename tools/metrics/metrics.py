@@ -18,8 +18,7 @@ from utils import utils
 from utils.debug import logger
 from mcptypes import assessment_config_tool_types as assessment_vo
 from mcptypes import assets_tools_type as assets_vo
-
-from mcptypes.metrics_tool_types import MetricsSourceSummaryResponseVO, MetricsSourceSummaryVO
+from mcptypes import metrics_tool_types as vo
 import constants.error_constants as error_constants
 from mcptypes.graph_tool_types import UniqueNodeDataVO , CypherQueryVO
 
@@ -27,7 +26,7 @@ from mcptypes.graph_tool_types import UniqueNodeDataVO , CypherQueryVO
 @mcp.tool(
     annotations=utils.tool_annotations("Get Metrics Assessment",read_only=True)
 )
-async def get_metrics_assessment(ctx: Context | None = None) -> dict:
+async def get_metrics_assessment(ctx: Context | None = None) -> vo.MetricsAssessmentResponseVO:
     """
     Get metrics assessment
 
@@ -45,8 +44,10 @@ async def get_metrics_assessment(ctx: Context | None = None) -> dict:
         METRICS_ASSESSMENT_NAME = os.getenv("METRICS_ASSESSMENT_NAME", "Metric Manager").strip()
         METRICS_CATEGORY_NAME = os.getenv("METRICS_CATEGORY_NAME", "Metric Manager").strip()
 
-        url = f"{constants.URL_PLANS}?fields=basic&name={METRICS_ASSESSMENT_NAME}"
-        resp = await utils.make_GET_API_call_to_CCow(url, ctx=ctx)
+        resp = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLANS, "GET", {
+            "fields": "basic",
+            "name": METRICS_ASSESSMENT_NAME,
+        }, ctx=ctx)
         logger.debug(
             "get_metrics_assessment output: {}\n".format(
                 json.dumps(resp) if isinstance(resp, (dict, list)) else resp
@@ -56,7 +57,7 @@ async def get_metrics_assessment(ctx: Context | None = None) -> dict:
         error = utils.handle_error_response(resp,"get_metrics_assessment")
         if error:
             logger.error("get_metrics_assessment error: {}\n".format(error))
-            return error
+            return vo.MetricsAssessmentResponseVO(success=False, error=utils.build_structured_error(resp, "get_metrics_assessment"))
 
         if isinstance(resp, dict) and "items" in resp:
             items = resp["items"]
@@ -76,7 +77,7 @@ async def get_metrics_assessment(ctx: Context | None = None) -> dict:
         logger.debug(f"get_metrics_assessment: assessment:\n{assessment}")    
 
         if assessment is not None:
-            return {"success": True, "data": assessment}
+            return vo.MetricsAssessmentResponseVO(success=True, data=assessment)
         
         else:
             logger.error("get_metrics_assessment error: No assessment found with name {}\n".format(METRICS_ASSESSMENT_NAME))
@@ -93,7 +94,7 @@ async def get_metrics_assessment(ctx: Context | None = None) -> dict:
             if error:
                 logger.error("get_metrics_assessment create_category_error: {}\n".format(error))
                 if isinstance(resp, dict) and create_category.get("Description") != "category name already exists":
-                    return error
+                    return vo.MetricsAssessmentResponseVO(success=False, error=utils.build_structured_error(create_category, "get_metrics_assessment:create_category"))
 
             payload = {
                 "name": METRICS_ASSESSMENT_NAME,
@@ -113,7 +114,7 @@ async def get_metrics_assessment(ctx: Context | None = None) -> dict:
             error = utils.handle_error_response(create_output,"get_metrics_assessment")
             if error:
                 logger.error("get_metrics_assessment create_error: {}\n".format(error))
-                return error
+                return vo.MetricsAssessmentResponseVO(success=False, error=utils.build_structured_error(create_output, "get_metrics_assessment:create_assessment"))
             
             if create_output.get("id"):
                 assessment = assessment_vo.AssessmentVO(
@@ -121,20 +122,20 @@ async def get_metrics_assessment(ctx: Context | None = None) -> dict:
                             name=METRICS_ASSESSMENT_NAME,
                             category_name=METRICS_CATEGORY_NAME
                         )
-                return {"success": True, "data": assessment}
+                return vo.MetricsAssessmentResponseVO(success=True, data=assessment)
 
-            return {"success": False, "error": "No metrics assessment found"}
+            return vo.MetricsAssessmentResponseVO(success=False, error=utils.build_structured_error("No metrics assessment found", "get_metrics_assessment"))
 
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_metrics_assessment error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.MetricsAssessmentResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "get_metrics_assessment"))
 
 
 @mcp.tool(
     annotations=utils.tool_annotations("List Assets",read_only=True)
 )
-async def list_assets(ctx: Context | None = None) -> dict:
+async def list_assets(ctx: Context | None = None) -> vo.MetricsAssetListResponseVO:
     """
         Get all assets
         
@@ -147,16 +148,12 @@ async def list_assets(ctx: Context | None = None) -> dict:
     try:
         logger.info("get_assets_list: \n")
 
-        output=await utils.make_GET_API_call_to_CCow(constants.URL_ASSETS, ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_ASSETS, "GET", ctx=ctx)
         logger.debug("assets output: {}\n".format(output))
-        
-        if isinstance(output, str) or  "error" in output:
-            logger.error("list_assets error: {}\n".format(output))
-            return assets_vo.AssetListVO(error="Facing internal error")
         
         error = utils.handle_error_response(output,"list_assets")
         if error:
-            return error
+            return vo.MetricsAssetListResponseVO(success=False, error=utils.build_structured_error(output, "metrics:list_assets"))
         
         assets: List[assets_vo.AssetVO]=[]
         for item in output["items"]:
@@ -165,16 +162,16 @@ async def list_assets(ctx: Context | None = None) -> dict:
         
         logger.debug("modified assets: {}\n".format(assets))
 
-        return {"success": True, "data": assets}
+        return vo.MetricsAssetListResponseVO(success=True, data=assets)
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("list_assets error: {}\n".format(e))
-        return assets_vo.AssetListVO(error="Facing internal error")
+        return vo.MetricsAssetListResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "metrics:list_assets"))
 
 @mcp.tool(
     annotations=utils.tool_annotations("Get Assets Data",read_only=True)
 )
-async def get_assets_data(assetId: str , ctx: Context | None = None) -> dict:
+async def get_assets_data(assetId: str, ctx: Context | None = None) -> vo.AssetDataResponseVO:
     """
     Get controls and evidence metadata for one asset (no sample data).
 
@@ -214,18 +211,19 @@ async def get_assets_data(assetId: str , ctx: Context | None = None) -> dict:
         ignored_evidence_names = {name.lower() for name in EVIDENCE_NAMES_TO_IGNORE}
 
         if not assetId:
-            return {
-                "success": False,
-                "error": "assetId is required",
-                "next_action": "list_assets",
-                "next_step": "Call list_assets and then re-run get_assets_data with an exact assetId.",
-            }
+            return vo.AssetDataResponseVO(
+                success=False,
+                error=utils.build_structured_error("assetId is required", "get_assets_data"),
+                next_action="list_assets",
+                next_step="Call list_assets and then re-run get_assets_data with an exact assetId.",
+            )
 
-        plan_url = (
-            f"{constants.URL_PLANS}"
-            f"?fields=basic&ids={assetId}&page=1&page_size=1"
-        )
-        plan_resp = await utils.make_GET_API_call_to_CCow(plan_url, ctx=ctx)
+        plan_resp = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLANS, "GET", {
+            "fields": "basic",
+            "ids": assetId,
+            "page": 1,
+            "page_size": 1,
+        }, ctx=ctx)
         logger.debug(
             "get_assets_data plan_resp for {}: {}\n".format(
                 assetId,
@@ -235,21 +233,22 @@ async def get_assets_data(assetId: str , ctx: Context | None = None) -> dict:
 
         plan_error = utils.handle_error_response(plan_resp, "get_assets_data:plan_lookup")
         if plan_error:
-            return plan_error
+            return vo.AssetDataResponseVO(success=False, error=utils.build_structured_error(plan_resp, "get_assets_data:plan_lookup"))
 
         plan_items = plan_resp.get("items", []) if isinstance(plan_resp, dict) else []
         plan = next(iter(plan_items), None)
         if not plan or not plan.get("id"):
-            return {
-                "success": False,
-                "error": f"No asset found for asset id: {assetId}",
-            }
+            return vo.AssetDataResponseVO(success=False, error=utils.build_structured_error(f"No asset found for asset id: {assetId}", "get_assets_data"))
 
         plan_id = plan.get("id")
         plan_name = plan.get("name")
 
-        run_url = f"{constants.URL_PLAN_INSTANCES}?plan_id={plan_id}&fields=basic&page=1&page_size=1"
-        run_resp = await utils.make_GET_API_call_to_CCow(run_url, ctx=ctx)
+        run_resp = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_INSTANCES, "GET", {
+            "plan_id": plan_id,
+            "fields": "basic",
+            "page": 1,
+            "page_size": 1,
+        }, ctx=ctx)
         logger.debug(
             "get_assets_data run_resp for {}: {}\n".format(
                 assetId,
@@ -259,22 +258,23 @@ async def get_assets_data(assetId: str , ctx: Context | None = None) -> dict:
 
         run_error = utils.handle_error_response(run_resp, "get_assets_data:run_lookup")
         if run_error:
-            return run_error
+            return vo.AssetDataResponseVO(success=False, error=utils.build_structured_error(run_resp, "get_assets_data:run_lookup"))
 
         run_items = run_resp.get("items", []) if isinstance(run_resp, dict) else []
         run = next(iter(run_items), None)
         if not run or not run.get("id"):
-            return {
-                "success": False,
-                "error": f"No data found for asset id: {assetId}",
-            }
+            return vo.AssetDataResponseVO(success=False, error=utils.build_structured_error(f"No data found for asset id: {assetId}", "get_assets_data"))
 
         asset_run_id = run.get("id")
         metrics: list[dict] = []
         page = 1
 
-        controls_url = f"{constants.URL_PLAN_INSTANCE_CONTROLS}?page={page}&page_size={page_size}&is_leaf_control=true&plan_instance_id={asset_run_id}"
-        controls_resp = await utils.make_GET_API_call_to_CCow(controls_url, ctx=ctx)
+        controls_resp = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_INSTANCE_CONTROLS, "GET", {
+            "page": page,
+            "page_size": page_size,
+            "is_leaf_control": "true",
+            "plan_instance_id": asset_run_id,
+        }, ctx=ctx)
         logger.debug(
             "get_assets_data controls_resp for {} (page {}): {}\n".format(
                 assetId,
@@ -285,10 +285,10 @@ async def get_assets_data(assetId: str , ctx: Context | None = None) -> dict:
 
         controls_error = utils.handle_error_response(controls_resp, "get_assets_data:controls_lookup")
         if controls_error:
-            return controls_error
+            return vo.AssetDataResponseVO(success=False, error=utils.build_structured_error(controls_resp, "get_assets_data:controls_lookup"))
 
         if not isinstance(controls_resp, dict):
-            return {"success": False, "error": "Invalid controls response"}
+            return vo.AssetDataResponseVO(success=False, error=utils.build_structured_error("Invalid controls response", "get_assets_data"))
 
         controls = controls_resp.get("items", [])
         for control in controls:
@@ -303,38 +303,38 @@ async def get_assets_data(assetId: str , ctx: Context | None = None) -> dict:
                     continue
 
                 evidence_list.append(
-                    {
-                        "evidenceName": evidence_name,
-                        "evidenceDescription": evidence.get("description", ""),
-                    }
+                    vo.AssetDataEvidenceVO(
+                        evidenceName=evidence_name,
+                        evidenceDescription=evidence.get("description", ""),
+                    )
                 )
 
             if evidence_list:
                 metrics.append(
-                    {
-                        "metricsId": control.get("controlId"),
-                        "metricsName": control.get("name", ""),
-                        "metricsDescription": control.get("description", ""),
-                        "evidence": evidence_list,
-                    }
+                    vo.AssetMetricVO(
+                        metricsId=control.get("controlId"),
+                        metricsName=control.get("name", ""),
+                        metricsDescription=control.get("description", ""),
+                        evidence=evidence_list,
+                    )
                 )
 
         total_metrics = len(metrics)
         requires_narrowing = total_metrics > metrics_narrowing_threshold
 
-        response = {
-            "success": True,
-            "data": {
-                "assetName": plan_name,
-                "assetId": plan_id,
-                "requiresNarrowing": requires_narrowing,
-                "metrics": metrics,
-            },
-        }
+        response = vo.AssetDataResponseVO(
+            success=True,
+            data=vo.AssetDataVO(
+                assetName=plan_name,
+                assetId=plan_id,
+                requiresNarrowing=requires_narrowing,
+                metrics=metrics,
+            ),
+        )
 
         if requires_narrowing:
-            response["next_action"] = "get_asset_metrics_evidence_sample_data"
-            response["next_step"] = (
+            response.next_action = "get_asset_metrics_evidence_sample_data"
+            response.next_step = (
                 "Ask the user to narrow their requirement first. Then select matching "
                 "metricsId values and call get_asset_metrics_evidence_sample_data with assetName and metricsIds."
             )
@@ -343,7 +343,7 @@ async def get_assets_data(assetId: str , ctx: Context | None = None) -> dict:
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_assets_data error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.AssetDataResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "get_assets_data"))
 
 @mcp.tool(
     annotations=utils.tool_annotations("Get Asset Metrics Evidence Sample Data",read_only=True)
@@ -353,7 +353,7 @@ async def get_asset_metrics_evidence_sample_data(
     metricsIds: List[str],
     sampleRecordsPerEvidence: int = 3,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.AssetMetricsEvidenceSampleResponseVO:
     """
     Get sample evidence records for selected metrics of an asset.
 
@@ -384,7 +384,7 @@ async def get_asset_metrics_evidence_sample_data(
 
         assetId = (assetId or "").strip()
         if not assetId:
-            return {"success": False, "error": "assetId is required"}
+            return vo.AssetMetricsEvidenceSampleResponseVO(success=False, error=utils.build_structured_error("assetId is required", "get_asset_metrics_evidence_sample_data"))
 
         EVIDENCE_NAMES_TO_IGNORE = ["LogFile", "AuditFile"]
         ignored_evidence_names = {name.lower() for name in EVIDENCE_NAMES_TO_IGNORE}
@@ -399,36 +399,44 @@ async def get_asset_metrics_evidence_sample_data(
         )
 
         if not selected_metrics_ids:
-            return {"success": False, "error": "metrics ids cannot be empty"}
+            return vo.AssetMetricsEvidenceSampleResponseVO(success=False, error=utils.build_structured_error("metrics ids cannot be empty", "get_asset_metrics_evidence_sample_data"))
 
         sample_size = int(sampleRecordsPerEvidence or 5)
         if sample_size <= 0:
             sample_size = 5
         sample_size = min(sample_size, 10)
 
-        plan_url = f"{constants.URL_PLANS}?fields=basic&ids={assetId}&page=1&page_size=1"
-        plan_resp = await utils.make_GET_API_call_to_CCow(plan_url, ctx=ctx)
+        plan_resp = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLANS, "GET", {
+            "fields": "basic",
+            "ids": assetId,
+            "page": 1,
+            "page_size": 1,
+        }, ctx=ctx)
         plan_error = utils.handle_error_response(plan_resp, "get_asset_metrics_evidence_sample_data:plan_lookup")
         if plan_error:
-            return plan_error
+            return vo.AssetMetricsEvidenceSampleResponseVO(success=False, error=utils.build_structured_error(plan_resp, "get_asset_metrics_evidence_sample_data:plan_lookup"))
 
         plan_items = plan_resp.get("items", []) if isinstance(plan_resp, dict) else []
         plan = next(iter(plan_items), None)
         if not plan or not plan.get("id"):
-            return {"success": False, "error": f"No asset found for asset id: {assetId}"}
+            return vo.AssetMetricsEvidenceSampleResponseVO(success=False, error=utils.build_structured_error(f"No asset found for asset id: {assetId}", "get_asset_metrics_evidence_sample_data"))
 
         plan_id = plan.get("id")
 
-        run_url = f"{constants.URL_PLAN_INSTANCES}?plan_id={plan_id}&fields=basic&page=1&page_size=1"
-        run_resp = await utils.make_GET_API_call_to_CCow(run_url, ctx=ctx)
+        run_resp = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_INSTANCES, "GET", {
+            "plan_id": plan_id,
+            "fields": "basic",
+            "page": 1,
+            "page_size": 1,
+        }, ctx=ctx)
         run_error = utils.handle_error_response(run_resp, "get_asset_metrics_evidence_sample_data:run_lookup")
         if run_error:
-            return run_error
+            return vo.AssetMetricsEvidenceSampleResponseVO(success=False, error=utils.build_structured_error(run_resp, "get_asset_metrics_evidence_sample_data:run_lookup"))
 
         run_items = run_resp.get("items", []) if isinstance(run_resp, dict) else []
         run = next(iter(run_items), None)
         if not run or not run.get("id"):
-            return {"success": False, "error": f"No data found for asset id: {assetId}"}
+            return vo.AssetMetricsEvidenceSampleResponseVO(success=False, error=utils.build_structured_error(f"No data found for asset id: {assetId}", "get_asset_metrics_evidence_sample_data"))
 
         asset_run_id = run.get("id")
         page_size = 500
@@ -436,19 +444,20 @@ async def get_asset_metrics_evidence_sample_data(
         matched_metrics: list[dict] = []
         selected_set = set(selected_metrics_ids)
 
-        controls_url = (
-            f"{constants.URL_PLAN_INSTANCE_CONTROLS}"
-            f"?page={page}&page_size={page_size}&is_leaf_control=true&plan_instance_id={asset_run_id}"
-        )
-        controls_resp = await utils.make_GET_API_call_to_CCow(controls_url, ctx=ctx)
+        controls_resp = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_INSTANCE_CONTROLS, "GET", {
+            "page": page,
+            "page_size": page_size,
+            "is_leaf_control": "true",
+            "plan_instance_id": asset_run_id,
+        }, ctx=ctx)
         controls_error = utils.handle_error_response(
             controls_resp, "get_asset_metrics_evidence_sample_data:controls_lookup"
         )
         if controls_error:
-            return controls_error
+            return vo.AssetMetricsEvidenceSampleResponseVO(success=False, error=utils.build_structured_error(controls_resp, "get_asset_metrics_evidence_sample_data:controls_lookup"))
 
         if not isinstance(controls_resp, dict):
-            return {"success": False, "error": "Invalid controls response format"}
+            return vo.AssetMetricsEvidenceSampleResponseVO(success=False, error=utils.build_structured_error("Invalid controls response format", "get_asset_metrics_evidence_sample_data"))
 
         controls = controls_resp.get("items", [])
         for control in controls:
@@ -456,16 +465,16 @@ async def get_asset_metrics_evidence_sample_data(
             if not control_id or control_id not in selected_set:
                 continue
             matched_metrics.append(
-                {
-                    "metricsId": control_id,
-                    "metricsName": control.get("name", ""),
-                    "metricsDescription": control.get("description", ""),
-                    "evidence": [],
-                }
+                vo.AssetMetricEvidenceDataVO(
+                    metricsId=control_id,
+                    metricsName=control.get("name", ""),
+                    metricsDescription=control.get("description", ""),
+                    evidence=[],
+                )
             )
 
         metrics_by_id = {
-            str(metric.get("metricsId") or "").strip(): metric
+            str(metric.metricsId or "").strip(): metric
             for metric in matched_metrics
         }
         max_concurrency = 10
@@ -504,20 +513,20 @@ async def get_asset_metrics_evidence_sample_data(
             for metric_id, evidence_obj in results:
                 if evidence_obj is None:
                     continue
-                metrics_by_id[metric_id]["evidence"].append(evidence_obj)
+                metrics_by_id[metric_id].evidence.append(vo.AssetMetricEvidenceSampleVO.model_validate(evidence_obj))
 
-        response = {
-            "success": True,
-            "data": {
-                "assetId": plan_id,
-                "metrics": matched_metrics,
-            },
-        }
+        response = vo.AssetMetricsEvidenceSampleResponseVO(
+            success=True,
+            data=vo.AssetMetricsEvidenceSampleDataVO(
+                assetId=plan_id,
+                metrics=matched_metrics,
+            ),
+        )
         return response
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_asset_metrics_evidence_sample_data error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.AssetMetricsEvidenceSampleResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "get_asset_metrics_evidence_sample_data"))
 
 @mcp.tool(
     annotations=utils.tool_annotations("Run Metrics Assessment",read_only=False)
@@ -527,7 +536,7 @@ async def run_metrics_assessment(
     name: str,
     description: str,
     ctx: Context | None = None
-) -> dict:
+) -> vo.MetricsRunResponseVO:
     """
     Trigger a new metrics assessment run.
 
@@ -545,7 +554,7 @@ async def run_metrics_assessment(
 
         err = utils.require_fields(locals(), ["metrics_assessment_id", "name", "description"])
         if err:
-            return err
+            return vo.MetricsRunResponseVO(success=False, error=utils.build_structured_error(err.get("error"), "run_metrics_assessment"))
 
         today_date = datetime.now().strftime("%m/%d/%Y")
         payload = {
@@ -573,21 +582,21 @@ async def run_metrics_assessment(
         error = utils.handle_error_response(output, "run_metrics_assessment")
         if error:
             logger.error("run_metrics_assessment error: {}\n".format(error))
-            return error
+            return vo.MetricsRunResponseVO(success=False, error=utils.build_structured_error(output, "run_metrics_assessment"))
 
-        return {
-            "success": True,
-            "data": {
-                "runId": output.get("id", "") if isinstance(output, dict) else "",
-                "status": output.get("status", "") if isinstance(output, dict) else "",
-                "name": output.get("name", name) if isinstance(output, dict) else name,
-                "description": output.get("description", description) if isinstance(output, dict) else description
-            }
-        }
+        return vo.MetricsRunResponseVO(
+            success=True,
+            data=vo.MetricsRunDataVO(
+                runId=output.get("id", "") if isinstance(output, dict) else "",
+                status=output.get("status", "") if isinstance(output, dict) else "",
+                name=output.get("name", name) if isinstance(output, dict) else name,
+                description=output.get("description", description) if isinstance(output, dict) else description,
+            ),
+        )
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("run_metrics_assessment error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.MetricsRunResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "run_metrics_assessment"))
 
 @mcp.tool(
     annotations=utils.tool_annotations("List Recent Metrics Assessment Runs",read_only=True)
@@ -595,7 +604,7 @@ async def run_metrics_assessment(
 async def get_all_recent_assessment_run_details(
     assessmentMetricsId: str,
     ctx: Context | None = None
-) -> dict:
+) -> vo.RecentMetricsRunListResponseVO:
     """
     Get recent metrics assessment run details (latest 10).
 
@@ -614,13 +623,14 @@ async def get_all_recent_assessment_run_details(
         assessment_metrics_id = (assessmentMetricsId or "").strip()
         err = utils.require_fields(locals(), ["assessment_metrics_id"])
         if err:
-            return err
+            return vo.RecentMetricsRunListResponseVO(success=False, error=utils.build_structured_error(err.get("error"), "get_all_recent_run_details"))
 
-        url = (
-            f"{constants.URL_PLAN_INSTANCES}"
-            f"?fields=basic&page=1&page_size=10&plan_id={assessment_metrics_id}"
-        )
-        output = await utils.make_GET_API_call_to_CCow(url, ctx=ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_INSTANCES, "GET", {
+            "fields": "basic",
+            "page": 1,
+            "page_size": 10,
+            "plan_id": assessment_metrics_id,
+        }, ctx=ctx)
         logger.debug(
             "get_all_recent_run_details output: {}\n".format(
                 json.dumps(output) if isinstance(output, (dict, list)) else output
@@ -630,30 +640,30 @@ async def get_all_recent_assessment_run_details(
         error = utils.handle_error_response(output, "get_all_recent_run_details")
         if error:
             logger.error("get_all_recent_run_details error: {}\n".format(error))
-            return error
+            return vo.RecentMetricsRunListResponseVO(success=False, error=utils.build_structured_error(output, "get_all_recent_run_details"))
 
         items = output.get("items", []) if isinstance(output, dict) else []
         if not isinstance(items, list):
             items = []
 
-        runs = []
+        runs: list[vo.RecentMetricsRunItemVO] = []
         for item in items:
             if not isinstance(item, dict):
                 continue
             runs.append(
-                {
-                    "metricAssessmentRunId": item.get("id", ""),
-                    "name": item.get("name", ""),
-                    "runTime": item.get("started", ""),
-                    "status": item.get("status", ""),
-                }
+                vo.RecentMetricsRunItemVO(
+                    metricAssessmentRunId=item.get("id", ""),
+                    name=item.get("name", ""),
+                    runTime=item.get("started", ""),
+                    status=item.get("status", ""),
+                )
             )
 
-        return {"success": True, "data": runs}
+        return vo.RecentMetricsRunListResponseVO(success=True, data=runs)
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_all_recent_run_details error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.RecentMetricsRunListResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "get_all_recent_run_details"))
 
 @mcp.tool(
     annotations=utils.tool_annotations("Get Metrics Assessment Run Details",read_only=True)
@@ -662,7 +672,7 @@ async def get_all_metrics_of_run(
     assessmentMetricsRunId: str,
     assessmentMetricsId: str,
     ctx: Context | None = None
-) -> dict:
+) -> vo.MetricsRunDetailsResponseVO:
     """
     Get transformed metrics for a metrics assessment run.
 
@@ -681,25 +691,25 @@ async def get_all_metrics_of_run(
             ["assessment_metrics_run_id", "assessment_metrics_id"],
         )
         if err:
-            return err
+            return vo.MetricsRunDetailsResponseVO(success=False, error=utils.build_structured_error(err.get("error"), "get_all_metrics_of_run"))
 
         output, error = await get_assessment_run_controls(ctx,assessment_metrics_run_id,basicFields=False)
 
         if error:
             logger.error("get_all_metrics_of_run error: {}\n".format(error))
-            return error
+            return vo.MetricsRunDetailsResponseVO(success=False, error=utils.build_structured_error(error.get("error"), "get_all_metrics_of_run"))
 
         items = output.get("items", []) if isinstance(output, dict) else []
         if not isinstance(items, list):
             items = []
 
-        metrics = []
+        metrics: list[vo.MetricRunItemVO] = []
         for item in items:
             if not isinstance(item, dict):
                 continue
 
-            metric_evidences = []
-            metric_evidences_sources = []
+            metric_evidences: list[vo.MetricEvidenceItemVO] = []
+            metric_evidences_sources: list[vo.MetricEvidenceSourceVO] = []
 
             evidences = item.get("evidences", [])
             if not isinstance(evidences, list):
@@ -715,62 +725,56 @@ async def get_all_metrics_of_run(
                 has_rule_id = bool(str(evidence.get("ruleId") or "").strip())
 
                 if has_rule_id:
-                    rule_evidence = {
-                        "name": evidence_name,
-                        "status": evidence_status,
-                        "metricScore": evidence_score,
-                    }
+                    rule_evidence = vo.MetricEvidenceItemVO(
+                        name=evidence_name,
+                        status=evidence_status,
+                        metricScore=evidence_score,
+                    )
                     compliance_calculation_infos = evidence.get("complianceCalculationInfos", {})
                     if isinstance(compliance_calculation_infos, dict):
                         gocel = compliance_calculation_infos.get("gocel")
                         if isinstance(gocel, dict):
-                            rule_evidence["cel_formula"] = {
-                                "filteringExpression (b)": gocel.get("include", ""),
-                                "compliantExpression (a)": gocel.get("compliance", ""),
-                            }
+                            rule_evidence.cel_formula = vo.MetricEvidenceFormulaVO(
+                                filteringExpression=gocel.get("include", ""),
+                                compliantExpression=gocel.get("compliance", ""),
+                            )
                     metric_evidences.append(rule_evidence)
                 elif evidence_name in ["LogFile", "AuditFile"]:
-                    metric_evidences_sources.append(
-                        {
-                            "name": evidence_name,
-                            "status": evidence_status,
-                        }
-                    )
+                    metric_evidences_sources.append(vo.MetricEvidenceSourceVO(name=evidence_name, status=evidence_status))
 
             if len(metric_evidences) == 0:
-                metric_evidences.append({"message": "No data available on this metric"})
+                metric_evidences.append(vo.MetricEvidenceItemVO(message="No data available on this metric"))
 
-            metric = {
-                "metricRunId": item.get("id", ""),
-                "name": item.get("name", ""),
-                "description": item.get("description", ""),
-                "metricId": item.get("controlId", ""),
-                "metricNumber": item.get("displayable", ""),
-                # "metricScore": item.get("compliancePCT__", ""),
-                "formula": "(a/b)*100",
-                "metricEvidences": metric_evidences,
-                "metricEvidencesSources": metric_evidences_sources,
-            }
+            metric = vo.MetricRunItemVO(
+                metricRunId=item.get("id", ""),
+                name=item.get("name", ""),
+                description=item.get("description", ""),
+                metricId=item.get("controlId", ""),
+                metricNumber=item.get("displayable", ""),
+                formula="(a/b)*100",
+                metricEvidences=metric_evidences,
+                metricEvidencesSources=metric_evidences_sources,
+            )
             metrics.append(metric)
 
 
-        return {
-            "success": True,
-            "data": {
-                "assessmentMetricsRunId": assessment_metrics_run_id,
-                "assessmentMetricsId": assessment_metrics_id,
-                "metrics": metrics,
-            },
-        }
+        return vo.MetricsRunDetailsResponseVO(
+            success=True,
+            data=vo.MetricsRunDetailsDataVO(
+                assessmentMetricsRunId=assessment_metrics_run_id,
+                assessmentMetricsId=assessment_metrics_id,
+                metrics=metrics,
+            ),
+        )
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_all_metrics_of_run error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.MetricsRunDetailsResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "get_all_metrics_of_run"))
 
 @mcp.tool(
     annotations=utils.tool_annotations("Add Metric",read_only=False)
 )
-async def add_metric(assessmentMetricsId: str,categoryName: str, descrition: str, ctx: Context | None = None) -> dict:
+async def add_metric(assessmentMetricsId: str,categoryName: str, descrition: str, ctx: Context | None = None) -> vo.MetricCreateResponseVO:
     """
     Add a metric to an assessment under the best matching category.
 
@@ -797,7 +801,7 @@ async def add_metric(assessmentMetricsId: str,categoryName: str, descrition: str
 
         err = utils.require_fields(locals(), ["assessmentMetricsId", "categoryName", "descrition"])
         if err:
-            return err
+            return vo.MetricCreateResponseVO(success=False, error=utils.build_structured_error(err.get("error"), "add_metric"))
 
         payload = {
             "categoryName": categoryName,
@@ -819,22 +823,22 @@ async def add_metric(assessmentMetricsId: str,categoryName: str, descrition: str
         )
         error = utils.handle_error_response(output,"add_metric")
         if error:
-            return error
+            return vo.MetricCreateResponseVO(success=False, error=utils.build_structured_error(output, "add_metric"))
 
         control_id = output.get("id")
         
-        return {"success": True, "data": {"metricsId": control_id}}
+        return vo.MetricCreateResponseVO(success=True, data=vo.MetricCreateDataVO(metricsId=control_id))
 
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("add_metric error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.MetricCreateResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "add_metric"))
 
 
 @mcp.tool(
     annotations=utils.tool_annotations("Update Metric",read_only=False)
 )
-async def update_metric(assessmentMetricsId: str,metricsId: str, descrition: str, ctx: Context | None = None) -> dict:
+async def update_metric(assessmentMetricsId: str,metricsId: str, descrition: str, ctx: Context | None = None) -> vo.MetricUpdateResponseVO:
     """
     Update an existing metric definition (name/description).
 
@@ -856,7 +860,7 @@ async def update_metric(assessmentMetricsId: str,metricsId: str, descrition: str
 
         err = utils.require_fields(locals(), ["assessmentMetricsId", "metricsId", "descrition"])
         if err:
-            return err
+            return vo.MetricUpdateResponseVO(success=False, error=utils.build_structured_error(err.get("error"), "update_metric"))
 
         payload = [
             {
@@ -884,14 +888,14 @@ async def update_metric(assessmentMetricsId: str,metricsId: str, descrition: str
         )
         error = utils.handle_error_response(output,"update_metric")
         if error:
-            return error
+            return vo.MetricUpdateResponseVO(success=False, error=utils.build_structured_error(output, "update_metric"))
         
-        return {"success": True, "message": "Metrics updated successfully"}
+        return vo.MetricUpdateResponseVO(success=True, message="Metrics updated successfully")
 
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("update_metric error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.MetricUpdateResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "update_metric"))
 
 @mcp.tool(
     annotations=utils.tool_annotations("List Metric Categories",read_only=True)
@@ -899,7 +903,7 @@ async def update_metric(assessmentMetricsId: str,metricsId: str, descrition: str
 async def get_all_metrics_categories(
     assessmentMetricsId: str,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.MetricsCategoryListResponseVO:
     """
     Get all metrics categories for an assessment id.
     """
@@ -909,7 +913,7 @@ async def get_all_metrics_categories(
         assessment_metrics_id = (assessmentMetricsId or "").strip()
         err = utils.require_fields(locals(), ["assessment_metrics_id"])
         if err:
-            return err
+            return vo.MetricsCategoryListResponseVO(success=False, error=utils.build_structured_error(err.get("error"), "get_all_metrics_category"))
         
         page_size = 100
         cur_page = 1
@@ -918,31 +922,35 @@ async def get_all_metrics_categories(
         max_pages = 10
 
         while has_next and cur_page <= max_pages:
-            query_params = f"?page={cur_page}&page_size={page_size}&plan_id={assessment_metrics_id}&fields=basic&is_root_control=true"
-            logger.debug(f"get_all_metrics_category fetching page {cur_page}: {query_params}\n")
+            logger.debug(
+                "get_all_metrics_category fetching page %s with page_size=%s, plan_id=%s, fields=basic, is_root_control=true\n",
+                cur_page,
+                page_size,
+                assessment_metrics_id,
+            )
 
-            output = await utils.make_GET_API_call_to_CCow(constants.URL_PLAN_CONTROLS + query_params, ctx=ctx)
+            output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_CONTROLS, "GET", {
+                "page": cur_page,
+                "page_size": page_size,
+                "plan_id": assessment_metrics_id,
+                "fields": "basic",
+                "is_root_control": "true",
+            }, ctx=ctx)
             logger.debug(
                 "get_all_metrics_category page: {}\noutput: {}\n".format(
                     cur_page, json.dumps(output) if isinstance(output, (dict, list)) else output
                 )
             )
 
-            if isinstance(output, str) or (isinstance(output, dict) and "error" in output):
+            output_error = utils.build_structured_error(output, "get_all_metrics_category")
+            if output_error:
                 if cur_page == 1:
                     logger.error("get_all_metrics_category error: {}\n".format(output))
-                    return {"success": False, "error": "Failed to fetch metrics categories"}
+                    return vo.MetricsCategoryListResponseVO(success=False, error=output_error)
                 has_next = False
                 break
 
             if isinstance(output, dict):
-                if "Message" in output:
-                    if cur_page == 1:
-                        logger.error("get_all_metrics_category error: {}\n".format(output))
-                        return {"success": False, "error": output}
-                    has_next = False
-                    break
-
                 items = output.get("items", [])
                 if not isinstance(items, list) or not items:
                     break
@@ -959,19 +967,13 @@ async def get_all_metrics_categories(
                 has_next = False
 
         if len(all_controls) == 0:
-            return {
-                "success": True,
-                "message": "No metrics categories exist",
-            }
+            return vo.MetricsCategoryListResponseVO(success=True, message="No metrics categories exist")
         
-        return {
-            "success": True,
-            "data": all_controls,
-        }
+        return vo.MetricsCategoryListResponseVO(success=True, data=all_controls)
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_all_metrics_category error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.MetricsCategoryListResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "get_all_metrics_category"))
 
 
 @mcp.tool(
@@ -980,7 +982,7 @@ async def get_all_metrics_categories(
 async def get_all_assessment_metrics(
     assessmentMetricsId: str,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.AssessmentMetricsListResponseVO:
     """
     Get all metrics for an assessment id.
     """
@@ -991,7 +993,7 @@ async def get_all_assessment_metrics(
 
         err = utils.require_fields(locals(), ["assessment_metrics_id"])
         if err:
-            return err
+            return vo.AssessmentMetricsListResponseVO(success=False, error=utils.build_structured_error(err.get("error"), "get_all_assessment_metrics"))
         
         page_size = 100
         cur_page = 1
@@ -1000,31 +1002,35 @@ async def get_all_assessment_metrics(
         max_pages = 10
 
         while has_next and cur_page <= max_pages:
-            query_params = f"?page={cur_page}&page_size={page_size}&plan_id={assessment_metrics_id}&fields=basic&is_leaf_control=true"
-            logger.debug(f"get_all_assessment_metrics fetching page {cur_page}: {query_params}\n")
+            logger.debug(
+                "get_all_assessment_metrics fetching page %s with page_size=%s, plan_id=%s, fields=basic, is_leaf_control=true\n",
+                cur_page,
+                page_size,
+                assessment_metrics_id,
+            )
 
-            output = await utils.make_GET_API_call_to_CCow(constants.URL_PLAN_CONTROLS + query_params, ctx=ctx)
+            output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_CONTROLS, "GET", {
+                "page": cur_page,
+                "page_size": page_size,
+                "plan_id": assessment_metrics_id,
+                "fields": "basic",
+                "is_leaf_control": "true",
+            }, ctx=ctx)
             logger.debug(
                 "get_all_assessment_metrics page: {}\noutput: {}\n".format(
                     cur_page, json.dumps(output) if isinstance(output, (dict, list)) else output
                 )
             )
 
-            if isinstance(output, str) or (isinstance(output, dict) and "error" in output):
+            output_error = utils.build_structured_error(output, "get_all_assessment_metrics")
+            if output_error:
                 if cur_page == 1:
                     logger.error("get_all_assessment_metrics error: {}\n".format(output))
-                    return {"success": False, "error": "Failed to fetch assessment metrics"}
+                    return vo.AssessmentMetricsListResponseVO(success=False, error=output_error)
                 has_next = False
                 break
 
             if isinstance(output, dict):
-                if "Message" in output:
-                    if cur_page == 1:
-                        logger.error("get_all_assessment_metrics error: {}\n".format(output))
-                        return {"success": False, "error": output}
-                    has_next = False
-                    break
-
                 items = output.get("items", [])
                 if not isinstance(items, list) or not items:
                     break
@@ -1032,13 +1038,13 @@ async def get_all_assessment_metrics(
                 for item in items:
                     if isinstance(item, dict) and "id" in item and "name" in item:
                         all_controls.append(
-                            {
-                                "id": item.get("id", ""),
-                                "name": item.get("name", ""),
-                                "description": item.get("description", ""),
-                                "alias": item.get("alias", ""),
-                                "metricNumber": item.get("displayable", ""),
-                            }
+                            vo.AssessmentMetricItemVO(
+                                id=item.get("id", ""),
+                                name=item.get("name", ""),
+                                description=item.get("description", ""),
+                                alias=item.get("alias", ""),
+                                metricNumber=item.get("displayable", ""),
+                            )
                         )
                 total_pages = int(output.get("TotalPage", 0)) or 1
                 cur_page += 1
@@ -1049,11 +1055,11 @@ async def get_all_assessment_metrics(
         logger.info(
             f"get_all_assessment_metrics: Found {len(all_controls)} control(s) across {cur_page - 1} page(s)\n"
         )
-        return {"success": True, "controls": all_controls, "totalCount": len(all_controls)}
+        return vo.AssessmentMetricsListResponseVO(success=True, metrics=all_controls, totalCount=len(all_controls))
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_all_assessment_metrics error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.AssessmentMetricsListResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "get_all_assessment_metrics"))
 
 
 @mcp.tool(
@@ -1065,7 +1071,7 @@ async def suggest_metrics_citations(
     description: str,
     metricsId: str = "",
     ctx: Context | None = None,
-) -> dict:
+) -> vo.MetricCitationSuggestionResponseVO:
     """
     Suggest citations for a metric name and description.
 
@@ -1101,7 +1107,7 @@ async def suggest_metrics_citations(
 
         err = utils.require_fields(locals(), ["assessment_metrics_id", "metric_name"])
         if err:
-            return err
+            return vo.MetricCitationSuggestionResponseVO(success=False, error=utils.build_structured_error(err.get("error"), "suggest_metrics_citations"))
 
         payload = {
             "assessment_type": "asset",
@@ -1118,28 +1124,22 @@ async def suggest_metrics_citations(
         }
         logger.debug("suggest_metrics_citations payload: {}\n".format(json.dumps(payload)))
 
-        output = await utils.make_API_call_to_CCow(payload, constants.URL_GET_SIMILAR_CONTROLS, ctx=ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_GET_SIMILAR_CONTROLS, "POST", payload, ctx=ctx)
         logger.debug(
             "suggest_metrics_citations output: {}\n".format(
                 json.dumps(output) if isinstance(output, dict) else output
             )
         )
 
-        if isinstance(output, str):
+        output_error = utils.build_structured_error(output, "suggest_metrics_citations")
+        if output_error:
             logger.error("suggest_metrics_citations error: {}\n".format(output))
-            return {"success": False, "error": output}
+            return vo.MetricCitationSuggestionResponseVO(success=False, error=output_error)
 
         if isinstance(output, dict):
-            if "error" in output:
-                logger.error("suggest_metrics_citations error: {}\n".format(output))
-                return {"success": False, "error": output.get("error")}
-            if "Message" in output:
-                logger.error("suggest_metrics_citations error: {}\n".format(output))
-                return {"success": False, "error": output}
-
             items = output.get("items", [])
             authority_document = output.get("authorityDocument", "")
-            abstracted_items = []
+            abstracted_items: list[vo.MetricCitationSuggestionItemVO] = []
             for item in items:
                 if not isinstance(item, dict):
                     continue
@@ -1152,33 +1152,29 @@ async def suggest_metrics_citations(
                     if not isinstance(suggestion, dict):
                         continue
                     abstracted_item["suggestions"].append(
-                        {
+                        vo.MetricCitationSuggestionVO.model_validate({
                             "Name": suggestion.get("Name", ""),
-                            "Metric ID": suggestion.get("Metric ID", suggestion.get("Control ID", "")),
+                            "Metric ID": str(suggestion.get("Metric ID", suggestion.get("Control ID", ""))),
                             "Metric Classification": suggestion.get("Classification", suggestion.get("Control Classification", "")),
                             "Impact Zone": suggestion.get("Impact Zone", ""),
                             "Metric Requirement": suggestion.get("Requirement", suggestion.get("Control Requirement", "")),
                             "Sort ID": suggestion.get("Sort ID", ""),
                             "Metric Type": suggestion.get("Type", suggestion.get("Control Type", "")),
                             "Score": suggestion.get("Score", 0.0),
-                        }
+                        })
                     )
-                abstracted_items.append(abstracted_item)
+                abstracted_items.append(vo.MetricCitationSuggestionItemVO.model_validate(abstracted_item))
             
 
             logger.info(f"suggest_metrics_citations Response : {abstracted_items}")
-            return {
-                "success": True,
-                "items": abstracted_items,
-                "authorityDocument": authority_document,
-            }
+            return vo.MetricCitationSuggestionResponseVO(success=True, items=abstracted_items, authorityDocument=authority_document)
 
         logger.error("suggest_metrics_citations error: Unexpected response type: {}\n".format(type(output)))
-        return {"success": False, "error": f"Unexpected response type: {type(output)}"}
+        return vo.MetricCitationSuggestionResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {type(output)}", "suggest_metrics_citations"))
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("suggest_metrics_citations error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.MetricCitationSuggestionResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "suggest_metrics_citations"))
 
 
 @mcp.tool(
@@ -1192,15 +1188,15 @@ async def attach_citation_to_metrics(
     sortId: str,
     metricsNames: List[str],
     ctx: Context | None = None,
-) -> dict:
+) -> vo.MetricCitationAttachmentResponseVO:
     """
     Attach one citation to a metric.
 
     Args:
     assessmentId (str): The assessment ID (plan ID) - MUST be user-selected.
-    metricsId (str): The control ID to attach citations to - MUST be user-selected.
+    metricsId (str): The Metrics ID to attach citations to - MUST be user-selected.
     authorityDocument (str): The authority document name (e.g., "Trial1 CF").
-    controlIdsInAuthorityDocument (List[str]): List of metric IDs from the authority document (e.g., ["10014"]).
+    metricsIdsInAuthorityDocument (List[str]): List of metric IDs from the authority document (e.g., ["10014"]).
     sortId (str): Sort ID from the suggestion (e.g., "010 014").
     metricNames (List[str]): List of metric names from the suggestion (e.g., ["Multifactor Authentication"]).
 
@@ -1226,17 +1222,17 @@ async def attach_citation_to_metrics(
         sort_id = (sortId or "").strip()
 
         if not assessment_metrics_id:
-            return {"success": False, "error": "assessmentMetricsId is required"}
+            return vo.MetricCitationAttachmentResponseVO(success=False, error=utils.build_structured_error("assessmentMetricsId is required", "attach_citation_to_metrics"))
         if not metrics_id:
-            return {"success": False, "error": "metricsId is required"}
+            return vo.MetricCitationAttachmentResponseVO(success=False, error=utils.build_structured_error("metricsId is required", "attach_citation_to_metrics"))
         if not authority_document:
-            return {"success": False, "error": "authorityDocument is required"}
+            return vo.MetricCitationAttachmentResponseVO(success=False, error=utils.build_structured_error("authorityDocument is required", "attach_citation_to_metrics"))
         if not metricsIdsInAuthorityDocument or not isinstance(metricsIdsInAuthorityDocument, list):
-            return {"success": False, "error": "metricsIdsInAuthorityDocument must be a non-empty list"}
+            return vo.MetricCitationAttachmentResponseVO(success=False, error=utils.build_structured_error("metricsIdsInAuthorityDocument must be a non-empty list", "attach_citation_to_metrics"))
         if not sort_id:
-            return {"success": False, "error": "sortId is required"}
+            return vo.MetricCitationAttachmentResponseVO(success=False, error=utils.build_structured_error("sortId is required", "attach_citation_to_metrics"))
         if not metricsNames or not isinstance(metricsNames, list):
-            return {"success": False, "error": "metricsNames must be a non-empty list"}
+            return vo.MetricCitationAttachmentResponseVO(success=False, error=utils.build_structured_error("metricsNames must be a non-empty list", "attach_citation_to_metrics"))
 
         payload = {
             "authorityDocument": authority_document,
@@ -1267,31 +1263,25 @@ async def attach_citation_to_metrics(
             )
         )
 
-        if isinstance(output, str):
+        output_error = utils.build_structured_error(output, "attach_citation_to_metrics")
+        if output_error:
             logger.error("attach_citation_to_metrics error: {}\n".format(output))
-            return {"success": False, "error": output}
+            return vo.MetricCitationAttachmentResponseVO(success=False, error=output_error)
         
         if isinstance(output, dict):
-            if "error" in output:
-                logger.error("attach_citation_to_metrics error: {}\n".format(output))
-                return {"success": False, "error": output.get("error")}
-            if "Message" in output:
-                logger.error("attach_citation_to_metrics error: {}\n".format(output))
-                return {"success": False, "error": output}
-            
             items = output.get("items", [])
-            abstracted_citations = []
+            abstracted_citations: list[vo.MetricCitationAttachmentVO] = []
             for item in items:
                 if isinstance(item, dict):
-                    abstracted_citation = {
-                        "id": item.get("id", ""),
-                        "metricsID": item.get("planControlID", ""),
-                        "authorityDocument": item.get("authorityDocument", ""),
-                        "metricsNames": item.get("controlNames", []),
-                        "metricsIdsInAuthorityDocument": item.get("controlsInAuthorityDocument", []),
-                        "sortID": item.get("sortID", ""),
-                        "status": item.get("status", "")
-                    }
+                    abstracted_citation = vo.MetricCitationAttachmentVO(
+                        id=item.get("id", ""),
+                        metricsID=item.get("planControlID", ""),
+                        authorityDocument=item.get("authorityDocument", ""),
+                        metricsNames=item.get("controlNames", []),
+                        metricsIdsInAuthorityDocument=item.get("controlsInAuthorityDocument", []),
+                        sortID=item.get("sortID", ""),
+                        status=item.get("status", "")
+                    )
                     abstracted_citations.append(abstracted_citation)
 
             logger.info(f"attach_citation_to_metrics: Successfully attached {len(abstracted_citations)} citation(s)\n")
@@ -1326,14 +1316,14 @@ async def attach_citation_to_metrics(
                 logger.warning(f"attach_citation_to_metrics: Failed to sync CCF IDs (citation still attached): {sync_error}\n")
                 logger.debug(traceback.format_exc())
 
-            return {"success": True, "citations": abstracted_citations}
+            return vo.MetricCitationAttachmentResponseVO(success=True, citations=abstracted_citations)
         
         logger.error("attach_citation_to_metrics error: Unexpected response type {}\n".format(type(output)))
-        return {"success": False, "error": f"Unexpected response type: {type(output)}"}
+        return vo.MetricCitationAttachmentResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {type(output)}", "attach_citation_to_metrics"))
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("attach_citation_to_metrics error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.MetricCitationAttachmentResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "attach_citation_to_metrics"))
 
 
 @mcp.tool(
@@ -1342,7 +1332,7 @@ async def attach_citation_to_metrics(
 async def fetch_metrics_source_summary(
     metricsId: str,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.MetricsSourceSummaryResponseVO:
     """
     Fetch source summary for a metric.
 
@@ -1358,7 +1348,7 @@ async def fetch_metrics_source_summary(
     No further actions or recommendations are allowed.
     
     Args:
-        controlId (str): Plan control ID provided by the user (mandatory).
+        metricsId (str): Metrics ID (mandatory).
 
     Returns:
         MetricsSourceSummaryResponseVO containing:
@@ -1373,7 +1363,10 @@ async def fetch_metrics_source_summary(
         metrics_id = (metricsId or "").strip()
         if not metrics_id:
             logger.error("fetch_metrics_source_summary error: metricsId is mandatory\n")
-            return MetricsSourceSummaryResponseVO(success=False, error="metricsId is mandatory")
+            return vo.MetricsSourceSummaryResponseVO(
+                success=False,
+                error=utils.build_structured_error("metricsId is mandatory", "fetch_metrics_source_summary"),
+            )
 
         payload = {"controlID": metrics_id}
         logger.debug("fetch_metrics_source_summary payload: {}\n".format(json.dumps(payload)))
@@ -1387,21 +1380,17 @@ async def fetch_metrics_source_summary(
             )
         )
 
-        if isinstance(output, str):
+        output_error = utils.build_structured_error(output, "fetch_metrics_source_summary")
+        if output_error:
             logger.error("fetch_metrics_source_summary error: {}\n".format(output))
-            return MetricsSourceSummaryResponseVO(success=False, error=output).model_dump()
+            return vo.MetricsSourceSummaryResponseVO(success=False, error=output_error)
+
         if isinstance(output, dict):
-            if "error" in output:
-                logger.error("fetch_metrics_source_summary error: {}\n".format(output))
-                return MetricsSourceSummaryResponseVO(success=False, error=output.get("error")).model_dump()
-            if "Message" in output:
-                logger.error("fetch_metrics_source_summary error: {}\n".format(output))
-                return MetricsSourceSummaryResponseVO(success=False, error=output).model_dump()
 
             try:
-                summary_data = MetricsSourceSummaryVO(**output)
+                summary_data = vo.MetricsSourceSummaryVO(**output)
                 logger.info("fetch_metrics_source_summary: Successfully parsed response into VO\n")
-                response = MetricsSourceSummaryResponseVO(
+                response = vo.MetricsSourceSummaryResponseVO(
                     success=True, 
                     data=summary_data,
                 )
@@ -1413,21 +1402,27 @@ async def fetch_metrics_source_summary(
                         "No evidence configurations are linked to this control. "
                         "SQL query automation cannot proceed. "
                     )
-                return response.model_dump()
+                return response
             except Exception as parse_error:
                 logger.error(f"fetch_metrics_source_summary error: Failed to parse response: {parse_error}\n")
                 logger.debug(traceback.format_exc())
-                return MetricsSourceSummaryResponseVO(
+                return vo.MetricsSourceSummaryResponseVO(
                     success=False, 
-                    error=f"Failed to parse response: {parse_error}"
-                ).model_dump()
+                    error=utils.build_structured_error(f"Failed to parse response: {parse_error}", "fetch_metrics_source_summary")
+                )
         
         logger.error("fetch_metrics_source_summary error: Unexpected response type {}\n".format(type(output)))
-        return MetricsSourceSummaryResponseVO(success=False, error=f"Unexpected response type: {type(output)}")
+        return vo.MetricsSourceSummaryResponseVO(
+            success=False,
+            error=utils.build_structured_error(f"Unexpected response type: {type(output)}", "fetch_metrics_source_summary"),
+        )
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_metrics_source_summary error: {}\n".format(e))
-        return MetricsSourceSummaryResponseVO(success=False, error=f"Unexpected error: {e}").model_dump()
+        return vo.MetricsSourceSummaryResponseVO(
+            success=False,
+            error=utils.build_structured_error(f"Unexpected error: {e}", "fetch_metrics_source_summary"),
+        )
 
 
 @mcp.tool(
@@ -1438,7 +1433,7 @@ async def get_metrics_evidence_sample_data(
     evidenceNames: List[str] | None = None,
     records: int = 3,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.MetricsEvidenceSampleResponseVO:
     """
     Fetch sample evidence data for a metric.
 
@@ -1456,7 +1451,7 @@ async def get_metrics_evidence_sample_data(
     Returns:
         Dict containing:
             - success (bool): API invocation status.
-            - metricsId (str): metrics ID.
+            - metricsRunId (str): metrics Run ID.
             - evidences (List[dict]): Evidence samples grouped by metrics/evidence. If an evidence
               is missing from the response, no records exist for it in the latest run.
             - next_action (str): Recommended next step.
@@ -1468,7 +1463,7 @@ async def get_metrics_evidence_sample_data(
         metrics_id = (metricsId or "").strip()
         if not metrics_id:
             logger.error("get_metrics_evidence_sample_data error: metricsId is mandatory\n")
-            return {"success": False, "error": "metricsId is required"}
+            return vo.MetricsEvidenceSampleResponseVO(success=False, error=utils.build_structured_error("metricsId is required", "get_metrics_evidence_sample_data"))
 
         try:
             record_count = int(records)
@@ -1493,7 +1488,7 @@ async def get_metrics_evidence_sample_data(
         error = utils.handle_error_response(output,"get_metrics_evidence_sample_data")
         if error:
             logger.error("get_metrics_evidence_sample_data error: {}\n".format(error))
-            return {"success": False, "error": error}
+            return vo.MetricsEvidenceSampleResponseVO(success=False, error=utils.build_structured_error(error.get("error"), "get_metrics_evidence_sample_data"))
 
         if isinstance(output, list):
 
@@ -1501,16 +1496,12 @@ async def get_metrics_evidence_sample_data(
                 if "controlId" in item:
                     item["metricsId"] = item.pop("controlId")
 
-            return {
-                "success": True,
-                "metricsId": metrics_id,
-                "evidences": output,
-            }
-        return {"success": False, "error": f"Unexpected response type: {type(output)}"}
+            return vo.MetricsEvidenceSampleResponseVO(success=True, metricsRunId=metrics_id, evidences=output)
+        return vo.MetricsEvidenceSampleResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {type(output)}", "get_metrics_evidence_sample_data"))
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_metrics_evidence_sample_data error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.MetricsEvidenceSampleResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "get_metrics_evidence_sample_data"))
 
 
 @mcp.tool(
@@ -1524,7 +1515,7 @@ async def validate_sql_query_and_cel(
     filteringCELExpression: str,
     compliantCELExpression: str,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.MetricsSqlValidationResponseVO:
     """
     Validate a SQL query and CEL Expression against reference evidence data.
     
@@ -1575,51 +1566,36 @@ async def validate_sql_query_and_cel(
 
         err = utils.require_fields(locals(), ["sql_query", "assessment_metrics_id", "metrics_id","filteringCEL_expression","compliantCEL_expression"])
         if err:
-            return err
+            return vo.MetricsSqlValidationResponseVO(success=False, error=utils.build_structured_error(err.get("error"), "validate_metrics_sql_query"))
 
         validated_evidences = []
         for idx, evidence in enumerate(referenceEvidences or []):
             if not isinstance(evidence, dict):
-                return {"success": False, "error": f"referenceEvidences[{idx}] must be a dict"}
+                return vo.MetricsSqlValidationResponseVO(success=False, error=utils.build_structured_error(f"referenceEvidences[{idx}] must be a dict", "validate_metrics_sql_query"))
 
             evidence_name = evidence.get("name")
             if not evidence_name or not str(evidence_name).strip():
-                return {"success": False, "error": f"referenceEvidences[{idx}].name is required"}
+                return vo.MetricsSqlValidationResponseVO(success=False, error=utils.build_structured_error(f"referenceEvidences[{idx}].name is required", "validate_metrics_sql_query"))
 
             evidence_id = evidence.get("id")
             evidence_file = evidence.get("file")
             if evidence_id and evidence_file:
-                return {
-                    "success": False,
-                    "error": f"referenceEvidences[{idx}] cannot include both 'id' and 'file'",
-                }
+                return vo.MetricsSqlValidationResponseVO(success=False, error=utils.build_structured_error(f"referenceEvidences[{idx}] cannot include both 'id' and 'file'", "validate_metrics_sql_query"))
             if not evidence_id and not evidence_file:
-                return {
-                    "success": False,
-                    "error": f"referenceEvidences[{idx}] must include either 'id' or 'file'",
-                }
+                return vo.MetricsSqlValidationResponseVO(success=False, error=utils.build_structured_error(f"referenceEvidences[{idx}] must include either 'id' or 'file'", "validate_metrics_sql_query"))
 
             evidence_payload = {"name": str(evidence_name).strip()}
             if evidence_id:
                 evidence_payload["id"] = str(evidence_id).strip()
             else:
                 if not isinstance(evidence_file, dict):
-                    return {
-                        "success": False,
-                        "error": f"referenceEvidences[{idx}].file must be a dict",
-                    }
+                    return vo.MetricsSqlValidationResponseVO(success=False, error=utils.build_structured_error(f"referenceEvidences[{idx}].file must be a dict", "validate_metrics_sql_query"))
                 file_content = evidence_file.get("content")
                 file_type = str(evidence_file.get("type") or "").strip().lower()
                 if not file_content or not str(file_content).strip():
-                    return {
-                        "success": False,
-                        "error": f"referenceEvidences[{idx}].file.content is required",
-                    }
+                    return vo.MetricsSqlValidationResponseVO(success=False, error=utils.build_structured_error(f"referenceEvidences[{idx}].file.content is required", "validate_metrics_sql_query"))
                 if file_type not in ["csv", "json"]:
-                    return {
-                        "success": False,
-                        "error": f"referenceEvidences[{idx}].file.type must be csv or json",
-                    }
+                    return vo.MetricsSqlValidationResponseVO(success=False, error=utils.build_structured_error(f"referenceEvidences[{idx}].file.type must be csv or json", "validate_metrics_sql_query"))
                 evidence_payload["file"] = {
                     "content": str(file_content).strip(),
                     "type": file_type,
@@ -1646,39 +1622,26 @@ async def validate_sql_query_and_cel(
             )
         )
 
-        if isinstance(output, str):
+        output_error = utils.build_structured_error(output, "validate_metrics_sql_query")
+        if output_error:
             logger.error("validate_metrics_sql_query error: {}\n".format(output))
-            return {"success": False, "error": output}
+            return vo.MetricsSqlValidationResponseVO(success=False, error=output_error)
         if isinstance(output, dict):
-            if "error" in output:
-                logger.error("validate_metrics_sql_query error: {}\n".format(output))
-                return {"success": False, "error": output.get("error")}
-            if "Message" in output:
-                logger.error("validate_metrics_sql_query error: {}\n".format(output))
-                return {"success": False, "error": output}
-            
             data_block = output.get("data")
             columns = data_block.get("columns") if isinstance(data_block, dict) else None
 
             if columns and isinstance(columns, list):
                 if len(columns) != len(set(columns)):
-                    return {
-                        "success": False,
-                        "error": "The column names are duplicated"
-                    }
+                    return vo.MetricsSqlValidationResponseVO(success=False, error=utils.build_structured_error("The column names are duplicated", "validate_metrics_sql_query"))
 
-            result = {
-                "success": True,
-                "resp": output
-            }
-            return result
+            return vo.MetricsSqlValidationResponseVO(success=True, resp=output)
         
         logger.error("validate_metrics_sql_query error: Unexpected response type {}\n".format(type(output)))
-        return {"success": False, "error": f"Unexpected response type: {type(output)}"}
+        return vo.MetricsSqlValidationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {type(output)}", "validate_metrics_sql_query"))
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("validate_metrics_sql_query error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.MetricsSqlValidationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "validate_metrics_sql_query"))
 
 @mcp.tool(
     annotations=utils.tool_annotations("Create SQL Query Evidence",read_only=False)
@@ -1690,7 +1653,7 @@ async def create_sql_query_evidence(
     newEvidenceName: str,
     confirm: bool = False,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.MetricSqlQueryEvidenceMutationResponseVO:
     """
     Create a SQL query evidence for a metricsId.
     
@@ -1752,15 +1715,15 @@ async def create_sql_query_evidence(
         
         if not metricsId or not str(metricsId).strip():
             logger.error("create_sql_query_evidence error: metricsId is mandatory\n")
-            return {"success": False, "error": "metricsId is mandatory"}
+            return vo.MetricSqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error("metricsId is mandatory", "metrics:create_sql_query_evidence"))
         
         if not sqlquery or not str(sqlquery).strip():
             logger.error("create_sql_query_evidence error: sqlquery is mandatory\n")
-            return {"success": False, "error": "sqlquery is mandatory"}
+            return vo.MetricSqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error("sqlquery is mandatory", "metrics:create_sql_query_evidence"))
         
         if not newEvidenceName or not str(newEvidenceName).strip():
             logger.error("create_sql_query_evidence error: newEvidenceName is mandatory\n")
-            return {"success": False, "error": "newEvidenceName is mandatory"}
+            return vo.MetricSqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error("newEvidenceName is mandatory", "metrics:create_sql_query_evidence"))
         
         # Build payload according to API specification
         payload = {
@@ -1771,15 +1734,15 @@ async def create_sql_query_evidence(
         
         if not confirm:
             logger.info("create_sql_query_evidence: Returning confirmation preview\n")
-            return {
-                "success": True,
-                "message": "Confirmation required before creating SQL query",
-                "controlConfigId": str(metricsId).strip(),
-                "sqlQuery": payload["sqlQuery"],
-                "newEvidenceName": payload["evidenceName"],
-                "referedEvidenceNames": payload["referedEvidenceNames"],
-                "next_step": "Review the SQL query above. If you need to modify it, provide the updated sqlquery parameter when calling with confirm=True. If correct, re-run with confirm=True to create and attach the query."
-            }
+            return vo.MetricSqlQueryEvidenceMutationResponseVO(
+                success=True,
+                message="Confirmation required before creating SQL query",
+                controlConfigId=str(metricsId).strip(),
+                sqlQuery=payload["sqlQuery"],
+                newEvidenceName=payload["evidenceName"],
+                referedEvidenceNames=payload["referedEvidenceNames"],
+                next_step="Review the SQL query above. If you need to modify it, provide the updated sqlquery parameter when calling with confirm=True. If correct, re-run with confirm=True to create and attach the query."
+            )
         
         url = f"{constants.URL_PLAN_CONTROLS}/{str(metricsId).strip()}/sql-query-evidences"
         
@@ -1797,40 +1760,32 @@ async def create_sql_query_evidence(
         logger.debug("create_sql_query_evidence output: {}\n".format(json.dumps(resp) if isinstance(resp, dict) else resp))
         
         # Handle error response
-        if isinstance(resp, str):
+        response_error = utils.build_structured_error(resp, "metrics:create_sql_query_evidence")
+        if response_error:
             logger.error("create_sql_query_evidence error: {}\n".format(resp))
-            return {"success": False, "error": resp}
-        
-        if isinstance(resp, dict):
-            # Check for error fields
-            if "Message" in resp:
-                logger.error("create_sql_query_evidence error: {}\n".format(resp))
-                return {"success": False, "error": resp}
-            
-            if "error" in resp:
-                logger.error("create_sql_query_evidence error: {}\n".format(resp.get("error")))
-                return {"success": False, "error": resp.get("error")}
+            return vo.MetricSqlQueryEvidenceMutationResponseVO(success=False, error=response_error)
 
+        if isinstance(resp, dict):
             rule_id = resp.get("ruleId")
             evidence_id = resp.get("evidenceId")
 
             if rule_id:
                 logger.info(f"create_sql_query_evidence: Successfully created SQL query with ruleId: {rule_id}\n")
-                return {
-                    "success": True,
-                    "evidenceId": evidence_id,
-                    "message": "SQL query and evidence config created successfully",
-                    "next_step": "Would you like to add documentation notes for this SQL query on the control? This is optional but recommended for traceability."
-                }
+                return vo.MetricSqlQueryEvidenceMutationResponseVO(
+                    success=True,
+                    evidenceId=evidence_id,
+                    message="SQL query and evidence config created successfully",
+                    next_step="Would you like to add documentation notes for this SQL query on the control? This is optional but recommended for traceability."
+                )
         
         # Fallback: wrap unexpected response type
         logger.error("create_sql_query_evidence error: Unexpected response type: {}\n".format(type(resp)))
-        return {"success": False, "error": f"Unexpected response type: {resp}"}
+        return vo.MetricSqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {resp}", "metrics:create_sql_query_evidence"))
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("create_sql_query_evidence error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error creating SQL query: {e}"}
+        return vo.MetricSqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error creating SQL query: {e}", "metrics:create_sql_query_evidence"))
 
 @mcp.tool(
     annotations=utils.tool_annotations("List SQL Query Evidence",read_only=True)
@@ -1838,7 +1793,7 @@ async def create_sql_query_evidence(
 async def list_sql_query_evidence(
     metricsId: str,
     ctx: Context | None = None
-) -> dict:
+) -> vo.MetricSqlQueryEvidenceListResponseVO:
     """
     List all SQL query evidences for a given metricsId.
     
@@ -1865,38 +1820,39 @@ async def list_sql_query_evidence(
         
         if not metricsId or not str(metricsId).strip():
             logger.error("list_sql_query_evidence error: metricsId is mandatory\n")
-            return {"success": False, "error": "metricsId is mandatory"}
+            return vo.MetricSqlQueryEvidenceListResponseVO(success=False, error=utils.build_structured_error("metricsId is mandatory", "metrics:list_sql_query_evidence"))
         
         metrics_id = str(metricsId).strip()
         url = f"{constants.URL_PLAN_CONTROLS}/{metrics_id}/sql-query-evidences"
         
         logger.debug("list_sql_query_evidence URL: {}\n".format(url))
         
-        output = await utils.make_GET_API_call_to_CCow(url, ctx=ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(url, "GET", ctx=ctx)
         
-        if isinstance(output, str) or (isinstance(output, dict) and "error" in output):
+        output_error = utils.build_structured_error(output, "metrics:list_sql_query_evidence")
+        if output_error:
             logger.error("list_sql_query_evidence error: {}\n".format(output))
-            return {"success": False, "error": "Failed to fetch SQL query evidences"}
-        
+            return vo.MetricSqlQueryEvidenceListResponseVO(success=False, error=output_error)
+
         if isinstance(output, dict):
-            if "Message" in output:
-                logger.error("list_sql_query_evidence error: {}\n".format(output))
-                return {"success": False, "error": output}
-            
             items = output.get("items", [])
             if not isinstance(items, list):
                 items = []
             
             logger.info(f"list_sql_query_evidence: Found {len(items)} SQL query evidence(s)\n")
-            return {"success": True, "evidences": items, "totalCount": len(items)}
+            return vo.MetricSqlQueryEvidenceListResponseVO(
+                success=True,
+                evidences=[vo.MetricSqlQueryEvidenceItemVO.model_validate(item) for item in items if isinstance(item, dict)],
+                totalCount=len(items),
+            )
 
         logger.error("list_sql_query_evidence error: Unexpected response type: {}\n".format(type(output)))
-        return {"success": False, "error": f"Unexpected response type: {output}"}
+        return vo.MetricSqlQueryEvidenceListResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {output}", "metrics:list_sql_query_evidence"))
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("list_sql_query_evidence error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error listing SQL query evidences: {e}"}
+        return vo.MetricSqlQueryEvidenceListResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error listing SQL query evidences: {e}", "metrics:list_sql_query_evidence"))
 
 @mcp.tool(
     annotations=utils.tool_annotations("Update SQL Query Evidence",read_only=False)
@@ -1909,7 +1865,7 @@ async def update_sql_query_evidence(
     newEvidenceName: str,
     confirm: bool = False,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.MetricSqlQueryEvidenceMutationResponseVO:
     """
     Update an existing SQL query evidence for a control configuration.
     
@@ -1952,19 +1908,19 @@ async def update_sql_query_evidence(
         
         if not metricsId or not str(metricsId).strip():
             logger.error("update_sql_query_evidence error: metricsId is mandatory\n")
-            return {"success": False, "error": "metricsId is mandatory"}
+            return vo.MetricSqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error("metricsId is mandatory", "metrics:update_sql_query_evidence"))
         
         if not evidenceId or not str(evidenceId).strip():
             logger.error("update_sql_query_evidence error: evidenceId is mandatory\n")
-            return {"success": False, "error": "evidenceId is mandatory"}
+            return vo.MetricSqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error("evidenceId is mandatory", "metrics:update_sql_query_evidence"))
         
         if not sqlquery or not str(sqlquery).strip():
             logger.error("update_sql_query_evidence error: sqlquery is mandatory\n")
-            return {"success": False, "error": "sqlquery is mandatory"}
+            return vo.MetricSqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error("sqlquery is mandatory", "metrics:update_sql_query_evidence"))
         
         if not newEvidenceName or not str(newEvidenceName).strip():
             logger.error("update_sql_query_evidence error: newEvidenceName is mandatory\n")
-            return {"success": False, "error": "newEvidenceName is mandatory"}
+            return vo.MetricSqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error("newEvidenceName is mandatory", "metrics:update_sql_query_evidence"))
         
         # Build payload according to API specification
         payload = {
@@ -1975,16 +1931,16 @@ async def update_sql_query_evidence(
         
         if not confirm:
             logger.info("update_sql_query_evidence: Returning confirmation preview\n")
-            return {
-                "success": True,
-                "message": "Confirmation required before updating SQL query evidence",
-                "controlConfigId": str(metricsId).strip(),
-                "evidenceId": str(evidenceId).strip(),
-                "sqlQuery": payload["sqlQuery"],
-                "newEvidenceName": payload["evidenceName"],
-                "referedEvidenceNames": payload["referedEvidenceNames"],
-                "next_step": "Review the updated SQL query above. If you need to modify it, provide the updated sqlquery parameter when calling with confirm=True. If correct, re-run with confirm=True to update the SQL query evidence."
-            }
+            return vo.MetricSqlQueryEvidenceMutationResponseVO(
+                success=True,
+                message="Confirmation required before updating SQL query evidence",
+                controlConfigId=str(metricsId).strip(),
+                evidenceId=str(evidenceId).strip(),
+                sqlQuery=payload["sqlQuery"],
+                newEvidenceName=payload["evidenceName"],
+                referedEvidenceNames=payload["referedEvidenceNames"],
+                next_step="Review the updated SQL query above. If you need to modify it, provide the updated sqlquery parameter when calling with confirm=True. If correct, re-run with confirm=True to update the SQL query evidence."
+            )
         
         url = f"{constants.URL_PLAN_CONTROLS}/{str(metricsId).strip()}/sql-query-evidences/{str(evidenceId).strip()}"
         
@@ -2001,36 +1957,24 @@ async def update_sql_query_evidence(
         logger.debug("update_sql_query_evidence output: {}\n".format(json.dumps(resp) if isinstance(resp, dict) else resp))
         
         # Handle error response
-        if isinstance(resp, str):
+        response_error = utils.build_structured_error(resp, "metrics:update_sql_query_evidence")
+        if response_error:
             logger.error("update_sql_query_evidence error: {}\n".format(resp))
-            return {"success": False, "error": resp}
-        
-        if isinstance(resp, dict):
-            # Check for error fields
-            if "Message" in resp:
-                logger.error("update_sql_query_evidence error: {}\n".format(resp))
-                return {"success": False, "error": resp}
-            
-            if "error" in resp:
-                logger.error("update_sql_query_evidence error: {}\n".format(resp.get("error")))
-                return {"success": False, "error": resp.get("error")}
+            return vo.MetricSqlQueryEvidenceMutationResponseVO(success=False, error=response_error)
 
+        if isinstance(resp, dict):
             updated_evidence_id = resp.get("evidenceId") or str(evidenceId).strip()
 
             logger.info(f"update_sql_query_evidence: Successfully updated SQL query evidence with evidenceId: {updated_evidence_id}\n")
-            return {
-                "success": True,
-                "evidenceId": updated_evidence_id,
-                "message": "SQL query evidence updated successfully",
-            }
+            return vo.MetricSqlQueryEvidenceMutationResponseVO(success=True, evidenceId=updated_evidence_id, message="SQL query evidence updated successfully")
         
         logger.error("update_sql_query_evidence error: Unexpected response type: {}\n".format(type(resp)))
-        return {"success": False, "error": f"Unexpected response type: {resp}"}
+        return vo.MetricSqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {resp}", "metrics:update_sql_query_evidence"))
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("update_sql_query_evidence error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error updating SQL query evidence: {e}"}
+        return vo.MetricSqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error updating SQL query evidence: {e}", "metrics:update_sql_query_evidence"))
 
 
 
@@ -2044,7 +1988,7 @@ async def add_cel_expression_to_metrics(
     filteringExpression: str,
     compliantExpression: str,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.CelMutationResponseVO:
     """
     Add CEL expressions to an existing metric.
     """
@@ -2056,13 +2000,13 @@ async def add_cel_expression_to_metrics(
         compliant_expression = (compliantExpression or "").strip()
 
         if not metrics_id:
-            return {"success": False, "error": "metricsId is required"}
+            return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error("metricsId is required", "add_cel_expression_to_metrics"))
         if not filtering_expression:
-            return {"success": False, "error": "filteringExpression is required"}
+            return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error("filteringExpression is required", "add_cel_expression_to_metrics"))
         if not compliant_expression:
-            return {"success": False, "error": "compliantExpression is required"}
+            return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error("compliantExpression is required", "add_cel_expression_to_metrics"))
         if not metricsEvidenceId or not str(metricsEvidenceId).strip():
-            return {"success": False, "error": "metricsEvidenceId is required"}
+            return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error("metricsEvidenceId is required", "add_cel_expression_to_metrics"))
 
         payload = [
             {
@@ -2086,11 +2030,11 @@ async def add_cel_expression_to_metrics(
         )
 
         if resp_raw.status_code == 502:
-            return {"success": False, "error": error_constants.ERROR_BAD_GATEWAY}
+            return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error(error_constants.ERROR_BAD_GATEWAY, "add_cel_expression_to_metrics"))
         
         
         if resp_raw.status_code == 204:
-            return {"success": True, "message": "CEL expressions added successfully"}
+            return vo.CelMutationResponseVO(success=True, message="CEL expressions added successfully")
 
         else:
                         # Error - parse error response
@@ -2106,16 +2050,16 @@ async def add_cel_expression_to_metrics(
             # Check for error fields in response
             if isinstance(error_resp, dict):
                 if "Message" in error_resp:
-                    return {"success": False, "error": error_resp}
+                    return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error(error_resp, "add_cel_expression_to_metrics"))
                 if "error" in error_resp:
-                    return {"success": False, "error": error_resp.get("error")}
+                    return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error(error_resp.get("error"), "add_cel_expression_to_metrics"))
 
-            return {"success": False, "error": f"Failed to add CEL expressions: HTTP {resp_raw.status_code}"}
+            return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error(f"Failed to add CEL expressions: HTTP {resp_raw.status_code}", "add_cel_expression_to_metrics"))
      
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("add_metrics_cel_expression error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "add_cel_expression_to_metrics"))
 
 
 @mcp.tool(
@@ -2127,7 +2071,7 @@ async def update_cel_expression_to_metrics(
     filteringExpression: str,
     compliantExpression: str,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.CelMutationResponseVO:
     """
     Update CEL expressions to an existing metric.
     """
@@ -2139,13 +2083,13 @@ async def update_cel_expression_to_metrics(
         compliant_expression = (compliantExpression or "").strip()
 
         if not metrics_id:
-            return {"success": False, "error": "metricsId is required"}
+            return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error("metricsId is required", "update_cel_expression_to_metrics"))
         if not filtering_expression:
-            return {"success": False, "error": "filteringExpression is required"}
+            return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error("filteringExpression is required", "update_cel_expression_to_metrics"))
         if not compliant_expression:
-            return {"success": False, "error": "compliantExpression is required"}
+            return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error("compliantExpression is required", "update_cel_expression_to_metrics"))
         if not metricsEvidenceId or not str(metricsEvidenceId).strip():
-            return {"success": False, "error": "metricsEvidenceId is required"}
+            return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error("metricsEvidenceId is required", "update_cel_expression_to_metrics"))
 
         payload = [
             {
@@ -2169,11 +2113,11 @@ async def update_cel_expression_to_metrics(
         )
 
         if resp_raw.status_code == 502:
-            return {"success": False, "error": error_constants.ERROR_BAD_GATEWAY}
+            return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error(error_constants.ERROR_BAD_GATEWAY, "update_cel_expression_to_metrics"))
         
         
         if resp_raw.status_code == 204:
-            return {"success": True, "message": "CEL expressions uplodated successfully"}
+            return vo.CelMutationResponseVO(success=True, message="CEL expressions updated successfully")
 
         else:
                         # Error - parse error response
@@ -2189,23 +2133,25 @@ async def update_cel_expression_to_metrics(
             # Check for error fields in response
             if isinstance(error_resp, dict):
                 if "Message" in error_resp:
-                    return {"success": False, "error": error_resp}
+                    return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error(error_resp, "update_cel_expression_to_metrics"))
                 if "error" in error_resp:
-                    return {"success": False, "error": error_resp.get("error")}
+                    return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error(error_resp.get("error"), "update_cel_expression_to_metrics"))
 
-            return {"success": False, "error": f"Failed to add CEL expressions: HTTP {resp_raw.status_code}"}
+            return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error(f"Failed to add CEL expressions: HTTP {resp_raw.status_code}", "update_cel_expression_to_metrics"))
      
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("update_cel_expression_to_metrics error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.CelMutationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error: {e}", "update_cel_expression_to_metrics"))
 
 
 
 @mcp.tool(
     annotations=utils.tool_annotations("Get CEL Expressions For Metric",read_only=True)
 )
-async def get_cel_expression_for_metrics(metricsId: str,evidenceId:str, ctx: Context | None = None) -> dict:
+async def get_cel_expression_for_metrics(
+    metricsId: str, evidenceId: str, ctx: Context | None = None
+) -> vo.CelExpressionResponseVO:
     """
     Get CEL expressions of an existing metric.
     """
@@ -2216,16 +2162,31 @@ async def get_cel_expression_for_metrics(metricsId: str,evidenceId:str, ctx: Con
         metrics_id = (metricsId or "").strip()
 
         if not metrics_id:
-            return {"success": False, "error": "metricsId is required"}
+            return vo.CelExpressionResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    "metricsId is required", "get_cel_expression_for_metrics"
+                ),
+            )
         
         if not evidenceId or not str(evidenceId).strip():
-            return {"success": False, "error": "evidenceId is required"}
+            return vo.CelExpressionResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    "evidenceId is required", "get_cel_expression_for_metrics"
+                ),
+            )
 
         assessment_control, error = await get_assessment_control(metrics_id, ctx=ctx) 
 
         if error:
             logger.error("get_cel_expression_for_metrics error: {}\n".format(error))
-            return {"success": False, "error": error}
+            return vo.CelExpressionResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    error, "get_cel_expression_for_metrics"
+                ),
+            )
         
 
         evidences = assessment_control.get("evidences", [])
@@ -2242,19 +2203,30 @@ async def get_cel_expression_for_metrics(metricsId: str,evidenceId:str, ctx: Con
         compliant_expression = gocel_info.get("compliance", "")
 
         if not filtering_expression and not compliant_expression:
-            return {"success": False, "error": "No CEL expressions found for this evidence"}
+            return vo.CelExpressionResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    "No CEL expressions found for this evidence",
+                    "get_cel_expression_for_metrics",
+                ),
+            )
 
-        return {
-            "success": True,
-            "filteringExpression": filtering_expression,
-            "compliantExpression": compliant_expression
-        }
+        return vo.CelExpressionResponseVO(
+            success=True,
+            filteringExpression=filtering_expression,
+            compliantExpression=compliant_expression,
+        )
 
 
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_cel_expression_for_metrics error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error: {e}"}
+        return vo.CelExpressionResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                f"Unexpected error: {e}", "get_cel_expression_for_metrics"
+            ),
+        )
 
 @mcp.tool(
     annotations=utils.tool_annotations("Create Metric Note",read_only=False)
@@ -2266,7 +2238,7 @@ async def create_metrics_note(
     topic: str,
     confirm: bool = False,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.MetricNoteMutationResponseVO:
     """
     Create a documentation note on a metrics.
     
@@ -2300,15 +2272,30 @@ async def create_metrics_note(
         
         if not metricsId or not str(metricsId).strip():
             logger.error("create_metrics_note error: metricsId is mandatory\n")
-            return {"success": False, "error": "metricsId is mandatory"}
+            return vo.MetricNoteMutationResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    "metricsId is mandatory", "create_metrics_note"
+                ),
+            )
         
         if not assessmentMetricsId or not str(assessmentMetricsId).strip():
             logger.error("create_metrics_note error: assessmentMetricsId is mandatory\n")
-            return {"success": False, "error": "assessmentMetricsId is mandatory"}
+            return vo.MetricNoteMutationResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    "assessmentMetricsId is mandatory", "create_metrics_note"
+                ),
+            )
         
         if not notes or not str(notes).strip():
             logger.error("create_metrics_note error: notes content is mandatory\n")
-            return {"success": False, "error": "notes content is mandatory"}
+            return vo.MetricNoteMutationResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    "notes content is mandatory", "create_metrics_note"
+                ),
+            )
         
         # Build payload
         payload = {
@@ -2320,14 +2307,14 @@ async def create_metrics_note(
 
         if not confirm:
             logger.info("create_metrics_note: Returning confirmation preview\n")
-            return {
-                "success": True,
-                "message": "Confirmation required before creating note",
-                "metricsId": payload["planControlID"],
-                "topic": payload["topic"],
-                "notes": payload["notes"],
-                "next_step": "Review the Note above. If you need to modify it, provide the updated note parameter when calling with confirm=True. If correct, re-run with confirm=True to create note."
-        }
+            return vo.MetricNoteMutationResponseVO(
+                success=True,
+                message="Confirmation required before creating note",
+                metricsId=payload["planControlID"],
+                topic=payload["topic"],
+                notes=payload["notes"],
+                next_step="Review the Note above. If you need to modify it, provide the updated note parameter when calling with confirm=True. If correct, re-run with confirm=True to create note.",
+            )
         
         # Construct URL with control config ID
         url = constants.URL_PLAN_CONTROL_NOTES.format(controlConfigId=str(metricsId).strip())
@@ -2345,7 +2332,12 @@ async def create_metrics_note(
         )
 
         if resp_raw.status_code == 502:
-            return {"success": False, "error": error_constants.ERROR_BAD_GATEWAY}
+            return vo.MetricNoteMutationResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    error_constants.ERROR_BAD_GATEWAY, "create_metrics_note"
+                ),
+            )
         
         
         if resp_raw.status_code == 201:
@@ -2362,11 +2354,11 @@ async def create_metrics_note(
                 noteId = resp.get("id")
             
             logger.info(f"create_metrics_note: Successfully created note with status 201\n")
-            return {
-                "success": True,
-                "noteId": noteId,
-                "message": "Note created successfully",
-            }
+            return vo.MetricNoteMutationResponseVO(
+                success=True,
+                noteId=noteId,
+                message="Note created successfully",
+            )
         else:
             # Error - parse error response
             error_resp = {}
@@ -2378,19 +2370,27 @@ async def create_metrics_note(
             
             logger.error("create_metrics_note error: Status {} - {}\n".format(resp_raw.status_code, error_resp))
             
-            # Check for error fields in response
-            if isinstance(error_resp, dict):
-                if "Message" in error_resp:
-                    return {"success": False, "error": error_resp}
-                if "error" in error_resp:
-                    return {"success": False, "error": error_resp.get("error")}
+            output_error = utils.build_structured_error(error_resp, "create_metrics_note")
+            if output_error:
+                return vo.MetricNoteMutationResponseVO(success=False, error=output_error)
 
-            return {"success": False, "error": f"Failed to create note: HTTP {resp_raw.status_code}"}
+            return vo.MetricNoteMutationResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Failed to create note: HTTP {resp_raw.status_code}",
+                    "create_metrics_note",
+                ),
+            )
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("create_metrics_note error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error creating metrics note: {e}"}
+        return vo.MetricNoteMutationResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                f"Unexpected error creating metrics note: {e}", "create_metrics_note"
+            ),
+        )
 
 
 @mcp.tool(
@@ -2399,7 +2399,7 @@ async def create_metrics_note(
 async def list_metrics_notes(
     metricsId: str,
     ctx: Context | None = None
-) -> dict:
+) -> vo.MetricNoteListResponseVO:
     """
     List all notes for a given metrics ID.
     
@@ -2421,41 +2421,60 @@ async def list_metrics_notes(
         
         if not metricsId or not str(metricsId).strip():
             logger.error("list_metrics_notes error: metricsId is mandatory\n")
-            return {"success": False, "error": "metricsId is mandatory"}
+            return vo.MetricNoteListResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    "metricsId is mandatory", "list_metrics_notes"
+                ),
+            )
         
         metrics_id = str(metricsId).strip()
         url = constants.URL_PLAN_CONTROL_NOTES.format(controlConfigId=metrics_id)
         
         logger.debug("list_metrics_notes URL: {}\n".format(url))
         
-        output = await utils.make_GET_API_call_to_CCow(url, ctx=ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(url, "GET", ctx=ctx)
         
         error = utils.handle_error_response(output,"list_metrics_notes")
         if error:
             logger.error("list_metrics_notes error: {}\n".format(error))
-            return {"success": False, "error": error}
+            return vo.MetricNoteListResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    error.get("error"), "list_metrics_notes"
+                ),
+            )
 
         items = output.get("items", [])
         if not isinstance(items, list):
             items = []
 
-        abstracted_items = []
-        for item in items:
-            if isinstance(item, dict):
-                abstracted_item = {
-                    "id": item.get("id", ""),
-                    "topic": item.get("topic", ""),
-                    "notes": item.get("notes", ""),
-                }
-                abstracted_items.append(abstracted_item)
+        abstracted_items = [
+            vo.MetricNoteItemVO(
+                id=item.get("id", ""),
+                topic=item.get("topic", ""),
+                notes=item.get("notes", ""),
+            )
+            for item in items
+            if isinstance(item, dict)
+        ]
         
         logger.info(f"list_metrics_notes: {abstracted_items} \n Found {len(abstracted_items)} note(s)\n")
-        return {"success": True, "notes": abstracted_items, "totalCount": len(abstracted_items)}
+        return vo.MetricNoteListResponseVO(
+            success=True,
+            notes=abstracted_items,
+            totalCount=len(abstracted_items),
+        )
     
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("list_metrics_notes error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error listing metrics notes: {e}"}
+        return vo.MetricNoteListResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                f"Unexpected error listing metrics notes: {e}", "list_metrics_notes"
+            ),
+        )
 
 @mcp.tool(
     annotations=utils.tool_annotations("Update Metric Note",read_only=False)
@@ -2468,7 +2487,7 @@ async def update_metrics_note(
     topic: str,
     confirm: bool = False,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.MetricNoteMutationResponseVO:
     """
     Update an existing documentation note on a metrics.
     
@@ -2505,19 +2524,39 @@ async def update_metrics_note(
         
         if not metricsId or not str(metricsId).strip():
             logger.error("update_metrics_note error: metricsId is mandatory\n")
-            return {"success": False, "error": "metricsId is mandatory"}
+            return vo.MetricNoteMutationResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    "metricsId is mandatory", "update_metrics_note"
+                ),
+            )
         
         if not noteId or not str(noteId).strip():
             logger.error("update_metrics_note error: noteId is mandatory\n")
-            return {"success": False, "error": "noteId is mandatory"}
+            return vo.MetricNoteMutationResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    "noteId is mandatory", "update_metrics_note"
+                ),
+            )
         
         if not assessmentId or not str(assessmentId).strip():
             logger.error("update_metrics_note error: assessmentId is mandatory\n")
-            return {"success": False, "error": "assessmentId is mandatory"}
+            return vo.MetricNoteMutationResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    "assessmentId is mandatory", "update_metrics_note"
+                ),
+            )
         
         if not notes or not str(notes).strip():
             logger.error("update_metrics_note error: notes content is mandatory\n")
-            return {"success": False, "error": "notes content is mandatory"}
+            return vo.MetricNoteMutationResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    "notes content is mandatory", "update_metrics_note"
+                ),
+            )
         
         # Build payload
         payload = {
@@ -2529,15 +2568,15 @@ async def update_metrics_note(
 
         if not confirm:
             logger.info("update_metrics_note: Returning confirmation preview\n")
-            return {
-                "success": True,
-                "message": "Confirmation required before updating note",
-                "metricsId": payload["planControlID"],
-                "noteId": str(noteId).strip(),
-                "topic": payload["topic"],
-                "notes": payload["notes"],
-                "next_step": "Review the updated Note above. If you need to modify it, provide the updated notes or topic parameters when calling with confirm=True. If correct, re-run with confirm=True to update the note."
-            }
+            return vo.MetricNoteMutationResponseVO(
+                success=True,
+                message="Confirmation required before updating note",
+                metricsId=payload["planControlID"],
+                noteId=str(noteId).strip(),
+                topic=payload["topic"],
+                notes=payload["notes"],
+                next_step="Review the updated Note above. If you need to modify it, provide the updated notes or topic parameters when calling with confirm=True. If correct, re-run with confirm=True to update the note.",
+            )
         
         # Construct URL with metrics ID and note ID
         url = f"{constants.URL_PLAN_CONTROL_NOTES.format(controlConfigId=str(metricsId).strip())}/{str(noteId).strip()}"
@@ -2555,15 +2594,20 @@ async def update_metrics_note(
         )
 
         if resp_raw.status_code == 502:
-            return {"success": False, "error": error_constants.ERROR_BAD_GATEWAY}
+            return vo.MetricNoteMutationResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    error_constants.ERROR_BAD_GATEWAY, "update_metrics_note"
+                ),
+            )
         
         if resp_raw.status_code == 204:
             logger.info(f"update_metrics_note: Successfully updated note with status 204\n")
-            return {
-                "success": True,
-                "noteId": str(noteId).strip(),
-                "message": "Note updated successfully",
-            }
+            return vo.MetricNoteMutationResponseVO(
+                success=True,
+                noteId=str(noteId).strip(),
+                message="Note updated successfully",
+            )
         else:
             # Error - parse error response
             error_resp = {}
@@ -2575,25 +2619,35 @@ async def update_metrics_note(
             
             logger.error("update_metrics_note error: Status {} - {}\n".format(resp_raw.status_code, error_resp))
             
-            # Check for error fields in response
-            if isinstance(error_resp, dict):
-                if "Message" in error_resp:
-                    return {"success": False, "error": error_resp}
-                if "error" in error_resp:
-                    return {"success": False, "error": error_resp.get("error")}
+            output_error = utils.build_structured_error(error_resp, "update_metrics_note")
+            if output_error:
+                return vo.MetricNoteMutationResponseVO(success=False, error=output_error)
 
-            return {"success": False, "error": f"Failed to update note: HTTP {resp_raw.status_code}"}
+            return vo.MetricNoteMutationResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Failed to update note: HTTP {resp_raw.status_code}",
+                    "update_metrics_note",
+                ),
+            )
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("update_metrics_note error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error updating metrics note: {e}"}
+        return vo.MetricNoteMutationResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                f"Unexpected error updating metrics note: {e}", "update_metrics_note"
+            ),
+        )
  
 
 @mcp.tool(
     annotations=utils.tool_annotations("Link Source Metrics To Target Metric",read_only=False)
 ) 
-async def link_source_metrics_to_target_metric(sourceMetricsIds: list[str], targetMetricId: str, ctx: Context | None = None) -> dict: 
+async def link_source_metrics_to_target_metric(
+    sourceMetricsIds: list[str], targetMetricId: str, ctx: Context | None = None
+) -> vo.LinkMetricsResponseVO:
     """
     Args:
     query (str): The Cypher query to execute against the graph database.
@@ -2607,10 +2661,22 @@ async def link_source_metrics_to_target_metric(sourceMetricsIds: list[str], targ
         logger.info("link_source_metrics_to_metric: \n")
 
         if not sourceMetricsIds:
-            return "sourceMetricsIds is required"
+            return vo.LinkMetricsResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    "sourceMetricsIds is required",
+                    "link_source_metrics_to_target_metric",
+                ),
+            )
         
         if not targetMetricId or not targetMetricId.strip():
-            return "targetMetricId is required"        
+            return vo.LinkMetricsResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    "targetMetricId is required",
+                    "link_source_metrics_to_target_metric",
+                ),
+            )
 
 
         payload = [
@@ -2641,15 +2707,29 @@ async def link_source_metrics_to_target_metric(sourceMetricsIds: list[str], targ
         error = utils.handle_error_response(output,"link_source_metrics_to_metric")
 
         if error:
-            return error
+            return vo.LinkMetricsResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    error.get("error"), "link_source_metrics_to_target_metric"
+                ),
+            )
         
-        return {"success":True, "message" : "Source metrics were successfully linked to the target metric."}
+        return vo.LinkMetricsResponseVO(
+            success=True,
+            message="Source metrics were successfully linked to the target metric.",
+        )
 
 
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("link_source_metrics_to_metric error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error linking source metrics to target metric notes: {e}"}
+        return vo.LinkMetricsResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                f"Unexpected error linking source metrics to target metric notes: {e}",
+                "link_source_metrics_to_target_metric",
+            ),
+        )
 
 
 # @mcp.tool()
@@ -2664,8 +2744,11 @@ async def get_graph_schema_relationship() -> dict | str:
     
     try:
         logger.info("\nget_schema_form_control: \n")
-        output=await utils.make_API_call_to_CCow({},constants.URL_RETRIEVE_GRAPH_SCHEMA_RELATIONSHIP)
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_RETRIEVE_GRAPH_SCHEMA_RELATIONSHIP, "POST", {})
         logger.debug("output: {}\n".format(output))
+        error = utils.build_structured_error(output, "get_graph_schema_relationship")
+        if error:
+            return {"error": error.model_dump() if hasattr(error, "model_dump") else error}
         enhanced_guidance = {
             "control_status_values": {
                 "status": ["Completed", "In Progress", "Pending", "Unassigned"],
@@ -2726,7 +2809,7 @@ async def get_graph_schema_relationship() -> dict | str:
          }
     except Exception as e:
         logger.error("get_schema_form_control error: {}\n".format(e))
-        return "Facing internal error"        
+        return {"error": utils.build_structured_error(f"Unexpected error: {e}", "get_graph_schema_relationship").model_dump()}        
 
 
 # @mcp.tool() 
@@ -2743,28 +2826,26 @@ async def execute_cypher_query(query: str, ctx: Context | None = None) -> Cypher
         logger.info("\nexecute_cypher_query: \n")
         logger.debug("query: {}".format(query))
 
-        output=await utils.make_API_call_to_CCow({
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_EXECUTE_CYPHER_QUERY, "POST", {
             "query": query,
-        },constants.URL_EXECUTE_CYPHER_QUERY, ctx=ctx)
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(output))
         
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "metrics:execute_cypher_query")
+        if error:
             logger.error("\nexecute_cypher_query error: {}\n".format(output))
-            return CypherQueryVO(error="Facing internal error")
+            return CypherQueryVO(error=error)
 
         return CypherQueryVO(result=output.get('result'))
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("\nexecute_cypher_query error: {}\n".format(e))
-        return CypherQueryVO(error="Facing internal error")
+        return CypherQueryVO(error=utils.build_structured_error(f"Unexpected error: {e}", "metrics:execute_cypher_query"))
 
 
 async def get_assessment(id: str, ctx: Context) -> tuple[dict | None, dict | None]:
-
-    url = f"{constants.URL_PLANS}/{id}?fields=basic"
-
     output = await utils.make_API_call_to_CCow_and_get_response(
-            url, "GET", ctx=ctx
+            f"{constants.URL_PLANS}/{id}", "GET", {"fields": "basic"}, ctx=ctx
         )
     
     error = utils.handle_error_response(output,"get_assessment_method")
@@ -2776,11 +2857,8 @@ async def get_assessment(id: str, ctx: Context) -> tuple[dict | None, dict | Non
 
 
 async def get_assessment_control(id: str, ctx: Context) -> tuple[dict | None, dict | None]:
-
-    url = f"{constants.URL_PLAN_CONTROLS}/{id}?fields=basic"
-
     output = await utils.make_API_call_to_CCow_and_get_response(
-            url, "GET", ctx=ctx
+            f"{constants.URL_PLAN_CONTROLS}/{id}", "GET", {"fields": "basic"}, ctx=ctx
         )
     
     error = utils.handle_error_response(output,"get_assessment_control_method")
@@ -2792,19 +2870,21 @@ async def get_assessment_control(id: str, ctx: Context) -> tuple[dict | None, di
 
 
 async def get_assessment_run(ctx: Context, assessment_id: str, ids: str = None, size: int = 10, basicFields: bool = True) -> tuple[dict | None, dict | None]:
-
-    url = f"{constants.URL_PLAN_INSTANCES}?plan_id={assessment_id}&"
+    req_body = {
+        "plan_id": assessment_id,
+    }
 
     if ids is not None:
-        url += f"ids={ids}&"
+        req_body["ids"] = ids
     else:
-        url += f"page=1&page_size={size}&"
+        req_body["page"] = 1
+        req_body["page_size"] = size
 
     if basicFields:
-        url += "fields=basic&"
+        req_body["fields"] = "basic"
 
     output = await utils.make_API_call_to_CCow_and_get_response(
-            url, "GET", ctx=ctx
+            constants.URL_PLAN_INSTANCES, "GET", req_body, ctx=ctx
         )
     
     error = utils.handle_error_response(output,"get_assessment_run_method")
@@ -2816,19 +2896,20 @@ async def get_assessment_run(ctx: Context, assessment_id: str, ids: str = None, 
 
 
 async def get_assessment_run_controls(ctx: Context, assessment_run_id: str,size: int = 100,leafLevel: bool = True,basicFields: bool = True) -> tuple[dict | None, dict | None]:
-
-    url = f"{constants.URL_PLAN_INSTANCE_CONTROLS}?plan_instance_id={assessment_run_id}&"
-
-    url += f"page=1&page_size={size}&"
+    req_body = {
+        "plan_instance_id": assessment_run_id,
+        "page": 1,
+        "page_size": size,
+    }
 
     if basicFields:
-        url += "fields=basic&"
+        req_body["fields"] = "basic"
 
     if leafLevel:
-        url += "is_leaf_control=true&"
+        req_body["is_leaf_control"] = "true"
 
     output = await utils.make_API_call_to_CCow_and_get_response(
-            url, "GET", ctx=ctx
+            constants.URL_PLAN_INSTANCE_CONTROLS, "GET", req_body, ctx=ctx
         )
     
     error = utils.handle_error_response(output,"get_assessment_run_method")
@@ -2880,9 +2961,10 @@ async def fetch_evidence_sample(
         "isDataToBeSplitted": True,
     }
 
-    fetch_data_resp = await utils.make_API_call_to_CCow(
-        fetch_data_payload,
+    fetch_data_resp = await utils.make_API_call_to_CCow_and_get_response(
         constants.URL_DATAHANDLER_FETCH_DATA,
+        "POST",
+        fetch_data_payload,
         ctx=ctx,
     )
 

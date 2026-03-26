@@ -1,26 +1,41 @@
-
-
-from dataclasses import dataclass, field
 from typing import List, Optional
 
-@dataclass
-class CategoryVO:
-    id: Optional[str]
-    name: Optional[str]
+from pydantic import BaseModel
+from mcptypes.error_type import StructuredError
 
-@dataclass
-class CategoryListVO:
+
+class CategoryVO(BaseModel):
+    id: Optional[str] = ""
+    name: Optional[str] = ""
+
+    model_config = {
+        "extra": "ignore",
+    }
+
+
+class CategoryListVO(BaseModel):
     categories: Optional[List[CategoryVO]] = None
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore",
+    }
 
 
-@dataclass
-class AssessmentVO:
-    id: Optional[str]
-    name: Optional[str]
-    category_name: Optional[str]
+class AssessmentVO(BaseModel):
+    id: Optional[str] = ""
+    name: Optional[str] = ""
+    category_name: Optional[str] = ""
 
-@dataclass
-class AssessmentListVO:
+    model_config = {
+        "extra": "ignore",
+    }
+
+
+class AssessmentListVO(BaseModel):
     assessments: Optional[List[AssessmentVO]] = None
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore",
+    }

@@ -13,7 +13,6 @@ from fastmcp import Context
 import os
 from pathlib import Path
 
-
 @mcp.tool(annotations=utils.tool_annotations("Fetch Recent Assessment Runs",read_only=True))
 async def fetch_recent_assessment_runs(id: str, ctx: Context | None = None) -> vo.AssessmentRunListVO:
     """
@@ -33,21 +32,27 @@ async def fetch_recent_assessment_runs(id: str, ctx: Context | None = None) -> v
                 - fromDate (str): From date of the assessement run.
                 - toDate (str): To date of the assessment run.
                 - status (str): Status of the assessment run.
-                - computedScore (str): Computed score.
-                - computedWeight (str): Computed weight.
+                - computedScore (float): Computed score.
+                - computedWeight (float)): Computed weight.
                 - complianceStatus (str): Compliance status.
-                - compliancePCT (str): Compliance percentage.
-                - complianceWeight (str): Compliance weight.
+                - compliancePCT (float): Compliance percentage.
+                - complianceWeight (float): Compliance weight.
                 - createdAt (str): Time and date when the assessement run was created. 
             - error (Optional[str]): An error message if any issues occurred during retrieval.
     """
     try:
-        output=await utils.make_GET_API_call_to_CCow(constants. URL_PLAN_INSTANCES + "?fields=basic&page=1&page_size=10&plan_id="+id, ctx)
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_INSTANCES, "GET", {
+            "fields": "basic",
+            "page": 1,
+            "page_size": 10,
+            "plan_id": id,
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(output))
 
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:fetch_recent_assessment_runs")
+        if error:
             logger.error("fetch_recent_assessment_runs error: {}\n".format(output))
-            return vo.AssessmentRunListVO(error="Facing internal error")
+            return vo.AssessmentRunListVO(error=error)
         
         recentAssessmentRuns: List[vo.AssessmentRunVO]= []
 
@@ -80,7 +85,7 @@ async def fetch_recent_assessment_runs(id: str, ctx: Context | None = None) -> v
     
     except Exception as e:
         logger.error("fetch_recent_assessment_runs error: {}\n".format(e))
-        return vo.AssessmentRunListVO(error="Facing internal error")
+        return vo.AssessmentRunListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_recent_assessment_runs"))
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Assessment Runs",read_only=True))
 async def fetch_assessment_runs(id: str, page: int=1, pageSize: int=0, ctx: Context | None = None) -> vo.AssessmentRunListVO:
@@ -104,30 +109,36 @@ async def fetch_assessment_runs(id: str, page: int=1, pageSize: int=0, ctx: Cont
                 - fromDate (str): From date of the assessement run.
                 - toDate (str): To date of the assessment run.
                 - status (str): Status of the assessment run.
-                - computedScore (str): Computed score.
-                - computedWeight (str): Computed weight.
+                - computedScore (float): Computed score.
+                - computedWeight (float): Computed weight.
                 - complianceStatus (str): Compliance status.
-                - compliancePCT (str): Compliance percentage.
-                - complianceWeight (str): Compliance weight.
+                - compliancePCT (float): Compliance percentage.
+                - complianceWeight (float): Compliance weight.
                 - createdAt (str): Time and date when the assessement run was created. 
             - error (Optional[str]): An error message if any issues occurred during retrieval.
     """
     try:
-        output=await utils.make_GET_API_call_to_CCow(f"{constants.URL_PLAN_INSTANCES}?fields=basic&page={page}&page_size={pageSize}&plan_id={id}", ctx)
-        logger.debug("output: {}\n".format(output))
-
         if page==0 and pageSize==0:
-            return "use pagination"
+            return vo.AssessmentRunListVO(error=utils.build_structured_error("use pagination", "assessments:fetch_assessment_runs"))
         elif page==0 and pageSize>0:
             page=1
         elif page>0  and pageSize==0:
             pageSize=10
         elif pageSize>10:
-            return "max page size is 10"
+            return vo.AssessmentRunListVO(error=utils.build_structured_error("max page size is 10", "assessments:fetch_assessment_runs"))
 
-        if isinstance(output, str) or  "error" in output:
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_INSTANCES, "GET", {
+            "fields": "basic",
+            "page": page,
+            "page_size": pageSize,
+            "plan_id": id,
+        }, ctx=ctx)
+        logger.debug("output: {}\n".format(output))
+
+        error = utils.build_structured_error(output, "assessments:fetch_assessment_runs")
+        if error:
             logger.error("fetch_assessment_runs error: {}\n".format(output))
-            return vo.AssessmentRunListVO(error="Facing internal error")
+            return vo.AssessmentRunListVO(error=error)
 
         # if isinstance(output, str):
         #     return output
@@ -163,7 +174,7 @@ async def fetch_assessment_runs(id: str, page: int=1, pageSize: int=0, ctx: Cont
     
     except Exception as e:
         logger.error("fetch_assessment_runs error: {}\n".format(e))
-        return vo.AssessmentRunListVO(error="Facing internal error")
+        return vo.AssessmentRunListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_assessment_runs"))
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Assessment Run Details",read_only=True))
 async def fetch_assessment_run_details(id: str, ctx: Context | None = None) -> vo.ControlListVO:
@@ -199,22 +210,27 @@ async def fetch_assessment_run_details(id: str, ctx: Context | None = None) -> v
     """
 
     try:
-        output=await utils.make_GET_API_call_to_CCow(constants.URL_PLAN_INSTANCE_CONTROLS + "?fields=basic&is_leaf_control=true&plan_instance_id="+id, ctx)
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_INSTANCE_CONTROLS, "GET", {
+            "fields": "basic",
+            "is_leaf_control": "true",
+            "plan_instance_id": id,
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
         
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:fetch_assessment_run_details")
+        if error:
             logger.error("fetch_assessment_run_details error: {}\n".format(output))
-            return vo.ControlListVO(error="Facing internal error")
+            return vo.ControlListVO(error=error)
 
         controls: List[vo.ControlVO] = []        
         for control in output["items"]:
             if "id" in control and "name" in control:
                 controls.append(vo.ControlVO.model_validate(control))
                 
-        return vo.ControlListVO(controls=controls).model_dump()
+        return vo.ControlListVO(controls=controls)
     except Exception as e:
         logger.error("fetch_assessment_run_details error: {}\n".format(e))
-        return vo.ControlVO(error="Facing internal error")
+        return vo.ControlListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_assessment_run_details"))
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Assessment Run Leaf Controls",read_only=True))
 async def fetch_assessment_run_leaf_controls(id: str, ctx: Context | None = None) ->  vo.ControlListVO:
@@ -249,24 +265,29 @@ async def fetch_assessment_run_leaf_controls(id: str, ctx: Context | None = None
             - error (Optional[str]): An error message if any issues occurred during retrieval.
     """
     try:
-        output=await utils.make_GET_API_call_to_CCow(constants.URL_PLAN_INSTANCE_CONTROLS +"?fields=basic&is_leaf_control=true&plan_instance_id="+id, ctx)
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_INSTANCE_CONTROLS, "GET", {
+            "fields": "basic",
+            "is_leaf_control": "true",
+            "plan_instance_id": id,
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
 
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:fetch_assessment_run_leaf_controls")
+        if error:
             logger.error("fetch_assessment_run_details error: {}\n".format(output))
-            return vo.ControlListVO(error="Facing internal error")
+            return vo.ControlListVO(error=error)
         
         leaf_controls: List[vo.ControlVO] = []        
         for control in output["items"]:
             if "id" in control and "name" in control:
                 leaf_controls.append(vo.ControlVO.model_validate(control))
 
-        ControlListVO = vo.ControlListVO(controls=leaf_controls) 
-        logger.debug("Modified output: {}\n".format(ControlListVO.model_dump()))
-        return ControlListVO.model_dump()
+        control_list = vo.ControlListVO(controls=leaf_controls)
+        logger.debug("Modified output: {}\n".format(control_list.model_dump()))
+        return control_list
     except Exception as e:
         logger.error("fetch_assessment_run_leaf_controls error: {}\n".format(e))
-        return vo.ControlListVO(error="Facing internal error")
+        return vo.ControlListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_assessment_run_leaf_controls"))
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Run Controls",read_only=True))
 async def fetch_run_controls(name: str, ctx: Context | None = None) -> vo.ControlListVO:
@@ -302,23 +323,29 @@ async def fetch_run_controls(name: str, ctx: Context | None = None) -> vo.Contro
             - error (Optional[str]): An error message if any issues occurred during retrieval.
     """
     try:
-        output=await utils.make_GET_API_call_to_CCow(f"{constants.URL_PLAN_INSTANCE_CONTROLS}?fields=basic&control_name_contains={name}&page=1&page_size=50", ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_INSTANCE_CONTROLS, "GET", {
+            "fields": "basic",
+            "control_name_contains": name,
+            "page": 1,
+            "page_size": 50,
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
 
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:fetch_run_controls")
+        if error:
             logger.error("fetch_run_controls error: {}\n".format(output))
-            return vo.ControlListVO(error="Facing internal error")
+            return vo.ControlListVO(error=error)
         
         controls: List[vo.ControlVO] = []        
         for control in output["items"]:
             if "id" in control and "name" in control:
                 controls.append(vo.ControlVO.model_validate(control))
-        ControlListVO = vo.ControlListVO(controls=controls) 
-        logger.debug("Modified output: {}\n".format(ControlListVO.model_dump()))
-        return ControlListVO.model_dump()
+        control_list = vo.ControlListVO(controls=controls)
+        logger.debug("Modified output: {}\n".format(control_list.model_dump()))
+        return control_list
     except Exception as e:
         logger.error("fetch_run_controls error: {}\n".format(e))
-        return vo.ControlListVO(error="Facing internal error")
+        return vo.ControlListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_run_controls"))
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Run Control Metadata",read_only=True))
 async def fetch_run_control_meta_data(id: str, ctx: Context | None = None) -> vo.ControlMetadataVO:
@@ -343,18 +370,18 @@ async def fetch_run_control_meta_data(id: str, ctx: Context | None = None) -> vo
         - error (Optional[str]): An error message if any issues occurred during retrieval.
     """
     try:
-        output = await utils.make_GET_API_call_to_CCow(f"{constants.URL_PLAN_INSTANCE_CONTROLS}/{id}/plan-data", ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(f"{constants.URL_PLAN_INSTANCE_CONTROLS}/{id}/plan-data", "GET", ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
         
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:fetch_run_control_meta_data")
+        if error:
             logger.error("fetch_run_control_meta_data error: {}\n".format(output))
-            return vo.ControlMetadataVO(error="Facing internal error")
+            return vo.ControlMetadataVO(error=error)
 
-        controlMetaData = vo.ControlMetadataVO.model_validate(output)
-        return controlMetaData.model_dump()
+        return vo.ControlMetadataVO.model_validate(output)
     except Exception as e:
         logger.error("fetch_control_meta_data error: {}\n".format(e))
-        return vo.ControlMetadataVO(error="Facing internal error")
+        return vo.ControlMetadataVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_run_control_meta_data"))
 
 
 
@@ -376,12 +403,15 @@ async def fetch_assessment_run_leaf_control_evidence(id: str, ctx: Context | Non
             - error (Optional[str]): An error message if any issues occurred during retrieval.
     """
     try:
-        output=await utils.make_GET_API_call_to_CCow(constants.URL_PLAN_INSTANCE_EVIDENCES + "?plan_instance_control_id="+id, ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_INSTANCE_EVIDENCES, "GET", {
+            "plan_instance_control_id": id,
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
 
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:fetch_assessment_run_leaf_control_evidence")
+        if error:
             logger.error("fetch_run_control_meta_data error: {}\n".format(output))
-            return vo.ControlEvidenceListVO(error="Facing internal error")
+            return vo.ControlEvidenceListVO(error=error)
         
         controlEvidences: List[vo.ControlEvidenceVO] = []
         for item in output["items"]:
@@ -391,7 +421,7 @@ async def fetch_assessment_run_leaf_control_evidence(id: str, ctx: Context | Non
         return vo.ControlEvidenceListVO(evidences=controlEvidences)
     except Exception as e:
         logger.error("fetch_assessment_run_leaf_control_evidence error: {}\n".format(e))
-        return vo.ControlEvidenceListVO(error="Facing internal error")
+        return vo.ControlEvidenceListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_assessment_run_leaf_control_evidence"))
 
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Controls",read_only=True))
@@ -406,11 +436,11 @@ async def fetch_controls(control_name:str = "", ctx: Context | None = None) -> v
     """
     try:
     
-        uniqueNodeSchemaVO = await graphdb.fetch_unique_node_data_and_schema(control_name)
-        return generate_cypher_query_for_control(control_name,uniqueNodeSchemaVO.unique_property_values, uniqueNodeSchemaVO.neo4j_schema)
+        uniqueNodeSchemaVO = await graphdb.fetch_unique_node_data_and_schema.fn(control_name)
+        return generate_cypher_query_for_control.fn(control_name, uniqueNodeSchemaVO.unique_property_values,uniqueNodeSchemaVO.neo4j_schema)
     except Exception as e:
         logger.error("fetch_controls error: {}\n".format(e))
-        return vo.ControlPromptVO(error="Facing internal error")
+        return vo.ControlPromptVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_controls"))
 
 @mcp.prompt()
 def generate_cypher_query_for_control(control_name: str =  "", unique_nodes: str = "", schema = "") -> vo.ControlPromptVO:
@@ -461,7 +491,7 @@ async def fetch_evidence_records(id: str, compliantStatus: str = "", ctx: Contex
         - error (Optional[str]): An error message if any issues occurred during retrieval.
     """
     try:
-        output=await utils.make_API_call_to_CCow({
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_DATAHANDLER_FETCH_DATA, "POST", {
             "evidenceID": id,
             "templateType": "evidence",
             "status": ["active"],
@@ -470,15 +500,16 @@ async def fetch_evidence_records(id: str, compliantStatus: str = "", ctx: Contex
             "isUserPriority": True,
             "considerFileSizeRestriction": True,
             "viewEvidenceFlow": True
-        },constants.URL_DATAHANDLER_FETCH_DATA, ctx=ctx)
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
 
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:fetch_evidence_records")
+        if error:
             logger.error("fetch_evidence_records error: {}\n".format(output))
-            return vo.RecordListVO(error="Facing internal error")
+            return vo.RecordListVO(error=error)
         
         if(output.get("Message") == "CANNOT_FIND_THE_FILE"):
-            return vo.RecordListVO(error="No data available to display")
+            return vo.RecordListVO(error=utils.build_structured_error("No data available to display", "assessments:fetch_evidence_records"))
          
         decoded_bytes = base64.b64decode(output["fileBytes"])
         decoded_string = decoded_bytes.decode('utf-8')
@@ -537,10 +568,10 @@ async def fetch_evidence_records(id: str, compliantStatus: str = "", ctx: Contex
         )
 
         logger.debug("Modified output: {}\n".format(result.model_dump()))
-        return result.model_dump()
+        return result
     except Exception as e:
         logger.error("fetch_evidence_records error: {}\n".format(e))
-        return vo.RecordListVO(error="Facing internal error")
+        return vo.RecordListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_evidence_records"))
     
 @mcp.tool(annotations=utils.tool_annotations("Fetch Evidence Record Schema",read_only=True))
 async def fetch_evidence_record_schema(id: str, ctx: Context | None = None) -> vo.RecordSchemaListVO:
@@ -556,7 +587,7 @@ async def fetch_evidence_record_schema(id: str, ctx: Context | None = None) -> v
         - error (Optional[str]): An error message if any issues occurred during retrieval.
     """
     try:
-        output=await utils.make_API_call_to_CCow({
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_DATAHANDLER_FETCH_DATA, "POST", {
             "evidenceID": id,
             "templateType": "evidence",
             "status": ["active"],
@@ -565,15 +596,16 @@ async def fetch_evidence_record_schema(id: str, ctx: Context | None = None) -> v
             "isUserPriority": True,
             "considerFileSizeRestriction": True,
             "viewEvidenceFlow": True
-        },constants.URL_DATAHANDLER_FETCH_DATA, ctx=ctx)
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
 
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:fetch_evidence_record_schema")
+        if error:
             logger.error("fetch_evidence_record_schema error: {}\n".format(output))
-            return vo.RecordSchemaListVO(error="Facing internal error")
+            return vo.RecordSchemaListVO(error=error)
         
         if(output.get("Message") == "CANNOT_FIND_THE_FILE"):
-            return vo.RecordSchemaListVO(error="No data available to display")
+            return vo.RecordSchemaListVO(error=utils.build_structured_error("No data available to display", "assessments:fetch_evidence_record_schema"))
         
         evidence_record_schema: List[vo.RecordSchemaVO]= []
 
@@ -581,16 +613,16 @@ async def fetch_evidence_record_schema(id: str, ctx: Context | None = None) -> v
             if "name" in item and "type" in item:
                 evidence_record_schema.append(vo.RecordSchemaVO.model_validate(item))
 
-        RecordSchemaListVO = vo.RecordSchemaListVO(schema=evidence_record_schema)
-        logger.debug("Modified output: {}\n".format(RecordSchemaListVO.model_dump()))
-        return RecordSchemaListVO.model_dump()
+        record_schema_list = vo.RecordSchemaListVO(recordSchema=evidence_record_schema)
+        logger.debug("Modified output: {}\n".format(record_schema_list.model_dump()))
+        return record_schema_list
     
     except Exception as e:
         logger.error("fetch_evidence_record_schema error: {}\n".format(e))
-        return vo.RecordSchemaListVO(error="Facing internal error")       
+        return vo.RecordSchemaListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_evidence_record_schema"))       
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Available Control Actions",read_only=True))
-async def fetch_available_control_actions(assessmentName: str, controlNumber: str = "", controlAlias: str = "", evidenceName: str = "", ctx: Context | None = None) -> vo.RecordListVO:
+async def fetch_available_control_actions(assessmentName: str, controlNumber: str = "", controlAlias: str = "", evidenceName: str = "", ctx: Context | None = None) -> vo.ActionsListVO:
     """
         This tool should be used for handling control-related actions such as create, update, or to retrieve available actions for a given control.
 
@@ -620,7 +652,7 @@ async def fetch_available_control_actions(assessmentName: str, controlNumber: st
 
     """
     try:
-        output=await utils.make_API_call_to_CCow({
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_AVAILABLE_ACTIONS, "POST", {
             "actionType":"action",
             "assessmentName": assessmentName,
             "controlNumber" : controlNumber,
@@ -628,12 +660,13 @@ async def fetch_available_control_actions(assessmentName: str, controlNumber: st
             "evidenceName": evidenceName,
             "isRulesReq":True,
             "triggerType":"userAction"
-        },constants.URL_FETCH_AVAILABLE_ACTIONS, ctx=ctx)
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
 
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:fetch_available_control_actions")
+        if error:
             logger.error("fetch_available_control_actions error: {}\n".format(output))
-            return vo.ActionsListVO(error="Facing internal error")
+            return vo.ActionsListVO(error=error)
         
         actions: List[vo.ActionsVO] = []
         for item in output.get("items", []):
@@ -655,10 +688,10 @@ async def fetch_available_control_actions(assessmentName: str, controlNumber: st
         return vo.ActionsListVO(actions=actions)
     except Exception as e:
         logger.error("fetch_available_control_actions error: {}\n".format(e))
-        return vo.ActionsListVO(error="Facing internal error")
+        return vo.ActionsListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_available_control_actions"))
     
 @mcp.tool(annotations=utils.tool_annotations("Fetch Assessment Available Actions",read_only=True))
-async def fetch_assessment_available_actions(name: str = "", ctx: Context | None = None) -> vo.RecordListVO:
+async def fetch_assessment_available_actions(name: str = "", ctx: Context | None = None) -> vo.ActionsListVO:
     """
         Get **actions available on assessment** for given assessment name. 
         Once fetched, ask user to confirm to execute the action, then use 'execute_action' tool with appropriate parameters to execute the action.
@@ -675,17 +708,18 @@ async def fetch_assessment_available_actions(name: str = "", ctx: Context | None
             - error (Optional[str]): An error message if any issues occurred during retrieval.
     """
     try:
-        output=await utils.make_API_call_to_CCow({
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_AVAILABLE_ACTIONS, "POST", {
             "actionType":"action",
             "assessmentName": name,
             "isRulesReq":True,
             "triggerType":"userAction"
-        },constants.URL_FETCH_AVAILABLE_ACTIONS, ctx=ctx)
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
 
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:fetch_assessment_available_actions")
+        if error:
             logger.error("fetch_available_control_actions error: {}\n".format(output))
-            return vo.ActionsListVO(error="Facing internal error")
+            return vo.ActionsListVO(error=error)
         
         actions: List[vo.ActionsVO] = []
         for item in output.get("items", []):
@@ -707,7 +741,7 @@ async def fetch_assessment_available_actions(name: str = "", ctx: Context | None
         return vo.ActionsListVO(actions=actions)
     except Exception as e:
         logger.error("fetch_assessment_available_actions error: {}\n".format(e))
-        return vo.ActionsListVO(error="Facing internal error")
+        return vo.ActionsListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_assessment_available_actions"))
     
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Evidence Available Actions",read_only=True))
@@ -732,7 +766,7 @@ async def fetch_evidence_available_actions(assessment_name: str = "", control_nu
             - error (Optional[str]): An error message if any issues occurred during retrieval.
     """
     try:
-        output=await utils.make_API_call_to_CCow({
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_AVAILABLE_ACTIONS, "POST", {
             "actionType":"action",
             "assessmentName": assessment_name,
             "controlNumber" : control_number,
@@ -740,12 +774,13 @@ async def fetch_evidence_available_actions(assessment_name: str = "", control_nu
             "evidenceName": evidence_name,
             "isRulesReq":True,
             "triggerType":"userAction"
-        },constants.URL_FETCH_AVAILABLE_ACTIONS, ctx=ctx)
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
 
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:fetch_evidence_available_actions")
+        if error:
             logger.error("fetch_evidence_available_actions error: {}\n".format(output))
-            return vo.ActionsListVO(error="Facing internal error")
+            return vo.ActionsListVO(error=error)
                 
         actions: List[vo.ActionsVO] = []
         for item in output.get("items", []):
@@ -767,7 +802,7 @@ async def fetch_evidence_available_actions(assessment_name: str = "", control_nu
         return vo.ActionsListVO(actions=actions)
     except Exception as e:
         logger.error("fetch_evidence_available_actions error: {}\n".format(e))
-        return vo.ActionsListVO(error="Facing internal error")
+        return vo.ActionsListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_evidence_available_actions"))
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch General Available Actions",read_only=True))
 async def fetch_general_available_actions(type: str = "", ctx: Context | None = None) -> vo.ActionsListVO:
@@ -789,17 +824,18 @@ async def fetch_general_available_actions(type: str = "", ctx: Context | None = 
             - error (Optional[str]): An error message if any issues occurred during retrieval.
     """
     try:
-        output=await utils.make_API_call_to_CCow({
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_AVAILABLE_ACTIONS, "POST", {
             "actionType":"action",
             "targetType" : type,
             "isRulesReq":True,
             "triggerType":"userAction"
-        },constants.URL_FETCH_AVAILABLE_ACTIONS, ctx=ctx)
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
 
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:fetch_general_available_actions")
+        if error:
             logger.error("fetch_evidence_available_actions error: {}\n".format(output))
-            return vo.ActionsListVO(error="Facing internal error")
+            return vo.ActionsListVO(error=error)
                 
         actions: List[vo.ActionsVO] = []
         for item in output.get("items", []):
@@ -821,7 +857,7 @@ async def fetch_general_available_actions(type: str = "", ctx: Context | None = 
         return vo.ActionsListVO(actions=actions)
     except Exception as e:
         logger.error("fetch_evidence_available_actions error: {}\n".format(e))
-        return vo.ActionsListVO(error="Facing internal error")
+        return vo.ActionsListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_general_available_actions"))
      
 @mcp.tool(annotations=utils.tool_annotations("Fetch Automated Controls Of An Assessment",read_only=True))
 async def fetch_automated_controls_of_an_assessment(assessment_id: str = "", ctx: Context | None = None) -> vo.AutomatedControlListVO:
@@ -847,13 +883,20 @@ async def fetch_automated_controls_of_an_assessment(assessment_id: str = "", ctx
     try:
         logger.info("fetch_automated_controls: \n")
 
-        output=await utils.make_GET_API_call_to_CCow(constants.URL_PLAN_CONTROLS + 
-         "?is_automated=true&fields=basic&skip_prereq_ctrl_priv_check=false&page=1&page_size=100&plan_id=" + assessment_id, ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_CONTROLS, "GET", {
+            "is_automated": "true",
+            "fields": "basic",
+            "skip_prereq_ctrl_priv_check": "false",
+            "page": 1,
+            "page_size": 100,
+            "plan_id": assessment_id,
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(output))
 
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:fetch_automated_controls_of_an_assessment")
+        if error:
             logger.error("fetch_automated_controls_of_an_assessment error: {}\n".format(output))
-            return vo.AutomatedControlListVO(error="Facing internal error")
+            return vo.AutomatedControlListVO(error=error)
         
         automated_controls: List[vo.AutomatedControlVO] = []
         for item in output["items"]:
@@ -875,7 +918,7 @@ async def fetch_automated_controls_of_an_assessment(assessment_id: str = "", ctx
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_automated_controls error: {}\n".format(e))
-        return vo.AutomatedControlListVO(error="Facing internal error")
+        return vo.AutomatedControlListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:fetch_automated_controls_of_an_assessment"))
 
 
 @mcp.tool(annotations=utils.tool_annotations("Execute Action",read_only=False))
@@ -942,27 +985,31 @@ async def execute_action(assessmentId: str, assessmentRunId: str, actionBindingI
 
         logger.debug("execute_action request body: {}\n".format(json.dumps(req_body)))
 
-        output=await utils.make_API_call_to_CCow(req_body,constants.URL_ACTIONS_EXECUTIONS, ctx=ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_ACTIONS_EXECUTIONS, "POST", req_body, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
 
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:execute_action")
+        if error:
             logger.error("execute_action error: {}\n".format(output))
-            return vo.TriggerActionVO(error="Facing internal error")
+            return vo.TriggerActionVO(error=error)
 
-        return vo.TriggerActionVO(id=output['id'])
+        if isinstance(output, dict) and "id" in output:
+            return vo.TriggerActionVO(id=output["id"], message="Action triggered successfully")
+
+        return vo.TriggerActionVO(error=utils.build_structured_error("Unexpected action response", "assessments:execute_action"))
     except Exception as e:
         logger.error("execute_action error: {}\n".format(e))
-        return vo.TriggerActionVO(error="Facing internal error")
+        return vo.TriggerActionVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:execute_action"))
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Upload Evidence",read_only=False))
 async def upload_evidence(
     runId: str, 
     runControlId: str, 
     filePath: str = None,
     fileBytes: str = None,
     fileName: str = None
-) -> str:
+) -> vo.UploadEvidenceVO:
     """
     Upload evidence file to ComplianceCow assessment run control
     
@@ -976,23 +1023,25 @@ async def upload_evidence(
     - fileName (str, optional): Name of the file when using fileBytes
     
     Returns:
-    - str: Success message with evidence ID, or error message
+    - id (str): Uploaded evidence id.
+    - message (str): Upload status message.
+    - error (str): Error message when upload fails.
     
     Note: Either provide filePath OR both fileBytes and fileName must be provided.
     """
     try:
         # Validate input parameters
         if filePath and (fileBytes or fileName):
-            return "Error: Cannot provide both filePath and fileBytes/filename. Please use only one method."
+            return vo.UploadEvidenceVO(error=utils.build_structured_error("Cannot provide both filePath and fileBytes/filename. Please use only one method.", "assessments:upload_evidence"))
         
         if not filePath and (not fileBytes or not fileName):
-            return "Error: Either filePath must be provided, or both fileBytes and filename must be provided for binary upload."
+            return vo.UploadEvidenceVO(error=utils.build_structured_error("Either filePath must be provided, or both fileBytes and filename must be provided for binary upload.", "assessments:upload_evidence"))
         
         # Handle filePath method
         if filePath:
             # Validate file exists
             if not os.path.exists(filePath):
-                return f"Error: File not found at path: {filePath}"
+                return vo.UploadEvidenceVO(error=utils.build_structured_error(f"File not found at path: {filePath}", "assessments:upload_evidence"))
             
             # Extract file info from path
             file_path = Path(filePath)
@@ -1016,7 +1065,7 @@ async def upload_evidence(
                 # Test decode to ensure valid base64
                 base64.b64decode(fileBytes)
             except Exception:
-                return "Error: Invalid base64 string provided in fileBytes"
+                return vo.UploadEvidenceVO(error=utils.build_structured_error("Invalid base64 string provided in fileBytes", "assessments:upload_evidence"))
         
         req_body = {
             "name": actualFileName,
@@ -1038,15 +1087,19 @@ async def upload_evidence(
             "planInstanceControlID": runControlId,
         }
         
-        output = await utils.make_API_call_to_CCow(req_body, '/v1/evidences/link')
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_LINK_EVIDENCE, "POST", req_body)
         logger.debug("output: {}\n".format(output))
         
-        if isinstance(output, str) or "error" in output:
+        error = utils.build_structured_error(output, "assessments:upload_evidence")
+        if error:
             logger.error("upload_evidence error: {}\n".format(output))
-            return "Facing internal server error"
+            return vo.UploadEvidenceVO(error=error)
             
-        return f"Evidence '{actualFileName}' uploaded successfully, id = {output.get('id')}"
+        return vo.UploadEvidenceVO(
+            id=output.get("id", ""),
+            message=f"Evidence '{actualFileName}' uploaded successfully"
+        )
         
     except Exception as e:
         logger.error("upload_evidence error: {}\n".format(e))
-        return f"Error uploading evidence: {str(e)}"
+        return vo.UploadEvidenceVO(error=utils.build_structured_error(f"Error uploading evidence: {str(e)}", "assessments:upload_evidence"))

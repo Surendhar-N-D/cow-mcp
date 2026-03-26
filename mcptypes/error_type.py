@@ -1,6 +1,5 @@
-
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, TypeAlias
 
 class ErrorVO (BaseModel) :
     error: Optional[str] = ""
@@ -12,3 +11,6 @@ class ErrorResponseVO (BaseModel) :
 class ErrorWorkflowVO (BaseModel):
     Message: Optional[str] = ""
     ErrorDetails: Optional[List[object]] = None
+
+
+StructuredError: TypeAlias = ErrorVO | ErrorResponseVO | ErrorWorkflowVO

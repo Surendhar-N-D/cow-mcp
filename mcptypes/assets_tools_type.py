@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from dataclasses import dataclass, field
 from typing import List, Optional, Any
+from mcptypes.error_type import StructuredError
 
 class ResourceTypeVO(BaseModel):
     resourceType: Optional[str] = ""
@@ -10,12 +11,12 @@ class ResourceTypeVO(BaseModel):
     }
 class ResourceTypeListVO(BaseModel):
     resourceTypes: Optional[List[ResourceTypeVO]] = None
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
     
 class ResourceTypeSummaryVO(BaseModel):
     resourcesTypes: Optional[List[ResourceTypeVO]] = None
     totalItems: Optional[int]= 0
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
 
 class AssetVO(BaseModel):
     id: Optional[str] = ""
@@ -26,21 +27,21 @@ class AssetVO(BaseModel):
     }
 class AssetListVO(BaseModel):
     assets: Optional[List[AssetVO]] = None
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
     
 class NumberOfChecks(BaseModel):
     COMPLIANT: Optional[int] = 0
     NON_COMPLIANT: Optional[int] = 0
     
 class AssestsSummaryVO(BaseModel):
-    integrationRunId: Optional[str] = Field(default="", alias="planRunID")
+    integrationRunId: Optional[str] = Field(default="", validation_alias="planRunID")
     assessmentName: Optional[str] = ""
     status: Optional[str] = ""
-    numberOfResources: Optional[int] = ""
+    numberOfResources: Optional[int] = None
     numberOfChecks: Optional[NumberOfChecks] = None
     dataStatus: Optional[str] = ""
     createdAt: Optional[str] = ""
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
     
     model_config = {
         "extra": "ignore"
@@ -68,15 +69,15 @@ class ChecksListVO(BaseModel):
     page: Optional[int] = 0
     totalPage: Optional[int] = 0
     totalItems: Optional[int] = 0
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
     
 class CheckSummaryVO(BaseModel):
     complianceSummary: Optional[Any] = None
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
     
 class ResourceSummaryVO(BaseModel):
     complianceSummary: Optional[Any] = None
-    error: Optional[str] = ""     
+    error: Optional[StructuredError] = None
 
 class ResourceCheckVO(BaseModel):
     name: Optional[str] = ""
@@ -85,7 +86,7 @@ class ResourceCheckVO(BaseModel):
     activationStatus: Optional[str] = ""
     priority: Optional[str] = ""
     controlName: Optional[str] = ""
-    complianceStatus: Optional[str] = Field(default="", alias="resourceComplianceStatus")
+    complianceStatus: Optional[str] = Field(default="", validation_alias="resourceComplianceStatus")
     
     model_config = {
         "extra": "ignore"
@@ -105,6 +106,6 @@ class ResourceListVO(BaseModel):
     page: Optional[int] = 0
     totalPage: Optional[int] = 0
     totalItems: Optional[int] = 0
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
     
     

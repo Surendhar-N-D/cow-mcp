@@ -7,7 +7,6 @@ import traceback
 
 from constants.constants import host
 from mcpconfig.config import mcp
-from tools.forms import forms
 from tools.general import general
 from utils.auth import CCowOAuthProvider
 from utils.debug import logger
@@ -24,7 +23,7 @@ if "insights" in MCP_TOOLS:
     from tools.assets import assets
     from tools.dashboard import dashboard
     from tools.graphdb import graphdb
-    from tools.help import help
+    # from tools.help import help
 
 if "rules" in MCP_TOOLS:
     from prompts.rule import rule
@@ -39,6 +38,7 @@ if "assistant" in MCP_TOOLS:
     from prompts.assistant import assistant
 
 if "metric" in MCP_TOOLS:
+    from prompts.metrics import metrics
     from tools.metrics import metrics
 
 if "forms" in MCP_TOOLS:

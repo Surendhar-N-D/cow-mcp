@@ -876,7 +876,11 @@ def get_assessments(params: Dict[str, Any] = None, ctx: Optional[Context] = None
     )
 
     if isinstance(assessment_response, str) or (isinstance(assessment_response, dict) and "error" in assessment_response):
-        return vo.AssessmentListVO(error="Unable to retrieve assessment details. Please try again later.")                
+        return vo.AssessmentListVO(
+            success=False,
+            assessments=[],
+            error={"error": "Unable to retrieve assessment details. Please try again later."},
+        )
     assessments = []
     for item in assessment_response.get("items", []):
         if "name" in item and "categoryName" in item:

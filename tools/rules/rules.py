@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, get_type_hints
 from urllib.parse import urlparse
 
+from pydantic import BaseModel
 import mcptypes.rule_type as vo
 from constants import constants
 from mcpconfig.config import mcp
@@ -31,9 +32,8 @@ import constants.error_constants as error_constants
 
 if constants.ENABLE_CCOW_API_TOOLS:
     if constants.ENABLE_CONTEXTUAL_VECTOR_SEARCH:
-        @mcp.tool()
-        def fetch_tasks_suggestions(user_requirement: str, summary_string: str, ctx: Context | None = None) -> Dict[str, Any]:
-            
+        @mcp.tool(annotations=utils.tool_annotations("Fetch Tasks Suggestions",read_only=True))
+        def fetch_tasks_suggestions(user_requirement: str, summary_string: str, ctx: Context | None = None) -> vo.TaskSuggestionResponseVO: 
             """
             Resource for intelligent task suggestion based on user requirements.
 
@@ -103,18 +103,30 @@ if constants.ENABLE_CCOW_API_TOOLS:
             try:
                 task_response = rule.fetch_rules_and_tasks_suggestions(query=summary_string, identifierType="tasks", ctx=ctx)
                 if not task_response:
-                    return {"error": f"No task found that matches the specified requirements."}
-                return task_response
+                    return vo.TaskSuggestionResponseVO(
+                        success=False,
+                        error=utils.build_structured_error(
+                            "No task found that matches the specified requirements.",
+                            "rules:fetch_tasks_suggestions",
+                        ),
+                    )
+                return vo.TaskSuggestionResponseVO(success=True, data=task_response)
             except Exception as e:
-                return {
-                    "error": f"An error occurred while retrieving the task with the specified details: {e}"
-                }
+                return vo.TaskSuggestionResponseVO(
+                    success=False,
+                    error=utils.build_structured_error(
+                        f"An error occurred while retrieving the task with the specified details: {e}",
+                        "rules:fetch_tasks_suggestions",
+                    ),
+                )
         
         
 
 
-    @mcp.tool()
-    def create_support_ticket(subject: str, description: str, priority: str, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Create Support Ticket",read_only=False))
+    def create_support_ticket(
+        subject: str, description: str, priority: str, ctx: Context | None = None
+    ) -> vo.SupportTicketResponseVO:
         """
         PURPOSE:  
         - Create structured support tickets only after strict user review and explicit approval of all descriptions.  
@@ -165,17 +177,29 @@ if constants.ENABLE_CCOW_API_TOOLS:
             response = rule.create_support_ticket_api(request_body, ctx)
             
             if not response:
-                return {"error": "Failed to create support ticket with the specified details."}
+                return vo.SupportTicketResponseVO(
+                    success=False,
+                    error=utils.build_structured_error(
+                        "Failed to create support ticket with the specified details.",
+                        "rules:create_support_ticket",
+                    ),
+                )
 
-            return response
+            return vo.SupportTicketResponseVO(success=True, data=response)
 
         except Exception as e:
-            return {
-                "error": f"An error occurred while creating the support ticket: {e}"
-            }
+            return vo.SupportTicketResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"An error occurred while creating the support ticket: {e}",
+                    "rules:create_support_ticket",
+                ),
+            )
     
-    @mcp.tool()
-    def get_applications_for_tag(tag_name: str, additional_tags: Dict[str, List[str]] = None, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Get Applications For Tag",read_only=True))
+    def get_applications_for_tag(
+        tag_name: str, additional_tags: Dict[str, List[str]] = None, ctx: Context | None = None
+    ) -> vo.ApplicationsForTagResponseVO:
         """
         Get available applications for a specific app tag.
 
@@ -206,7 +230,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
                 "validated": True
             }
 
-            applications = []
+            applications: list[vo.ApplicationItemVO] = []
 
             applications_resp = wsutils.get(
                 path=wsutils.build_api_url(endpoint=constants.URL_FETCH_CREDENTIAL), 
@@ -236,56 +260,68 @@ if constants.ENABLE_CCOW_API_TOOLS:
                         if not match:
                             continue  # Skip this application
                     
-                    applications.append({
-                        "id": item.get("id"),
-                        "name": item.get("credentialName"),
-                        "appType": app_type,
-                        "othersTags": others_tags
-                    })
+                    applications.append(
+                        vo.ApplicationItemVO(
+                            id=item.get("id"),
+                            name=item.get("credentialName"),
+                            appType=app_type,
+                            othersTags=others_tags,
+                        )
+                    )
                 
                 filter_msg = ""
                 if additional_tags:
                     filter_msg = f" (filtered by {additional_tags})"
                 
                 if applications:
-                    return {
-                        "success": True, 
-                        "tag_name": tag_name, 
-                        "additional_tags": additional_tags,
-                        "applications": applications, 
-                        "count": len(applications), 
-                        "message": f"Found {len(applications)} applications for tag '{tag_name}'{filter_msg}. User can select an existing application or create new credentials."
-                    }
+                    return vo.ApplicationsForTagResponseVO(
+                        success=True,
+                        tag_name=tag_name,
+                        additional_tags=additional_tags,
+                        applications=applications,
+                        count=len(applications),
+                        message=f"Found {len(applications)} applications for tag '{tag_name}'{filter_msg}. User can select an existing application or create new credentials.",
+                    )
                 else:
-                    return {
-                        "success": False,
-                        "tag_name": tag_name,
-                        "additional_tags": additional_tags,
-                        "applications": [],
-                        "count": 0,
-                        "message": f"No applications found for tag '{tag_name}'{filter_msg}. User can create new credentials."
-                    }
+                    return vo.ApplicationsForTagResponseVO(
+                        success=False,
+                        tag_name=tag_name,
+                        additional_tags=additional_tags,
+                        applications=[],
+                        count=0,
+                        message=f"No applications found for tag '{tag_name}'{filter_msg}. User can create new credentials.",
+                    )
             else:
-                return {
-                    "success": False,
-                    "tag_name": tag_name,
-                    "additional_tags": additional_tags,
-                    "applications": [],
-                    "count": 0,
-                    "message": f"No applications found for tag '{tag_name}'. User can create new credentials."
-                }
+                return vo.ApplicationsForTagResponseVO(
+                    success=False,
+                    tag_name=tag_name,
+                    additional_tags=additional_tags,
+                    applications=[],
+                    count=0,
+                    message=f"No applications found for tag '{tag_name}'. User can create new credentials.",
+                )
 
         except Exception as e:
-            return {
-                "success": False, 
-                "tag_name": tag_name,
-                "applications": [],
-                "count": 0,
-                "message": f"Error occurred while fetching applications for tag '{tag_name}': {e}"
-            }
+            return vo.ApplicationsForTagResponseVO(
+                success=False,
+                tag_name=tag_name,
+                applications=[],
+                count=0,
+                message=f"Error occurred while fetching applications for tag '{tag_name}': {e}",
+                error=utils.build_structured_error(
+                    f"Error occurred while fetching applications for tag '{tag_name}': {e}",
+                    "rules:get_applications_for_tag",
+                ),
+            )
 
-    @mcp.tool()
-    def attach_rule_to_control(rule_id: str, assessment_name: str, control_id: str,create_evidence: bool = True, ctx: Context | None = None ) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Attach Rule To Control",read_only=False))
+    def attach_rule_to_control(
+        rule_id: str,
+        assessment_name: str,
+        control_id: str,
+        create_evidence: bool = True,
+        ctx: Context | None = None,
+    ) -> vo.AttachRuleToControlResponseVO:
 
         """
         Attach a rule to a specific control in an assessment.
@@ -361,41 +397,51 @@ if constants.ENABLE_CCOW_API_TOOLS:
             response = rule.attach_rule_to_control_api(control_id,body, ctx)
             
             if response.get("success") or response.get("status") == "attached":
-                result = {
-                    "success": True,
-                    "rule_id": rule_id,
-                    "assessment_name": assessment_name,
-                    "control_id": control_id,
-                    "attachment_status": "attached",
-                    "evidence_created": create_evidence,
-                    "message": f"Rule '{rule_id}' successfully attached to control '{control_id}' in assessment '{assessment_name}'"
-                }
+                result = vo.AttachRuleToControlResponseVO(
+                    success=True,
+                    rule_id=rule_id,
+                    assessment_name=assessment_name,
+                    control_id=control_id,
+                    attachment_status="attached",
+                    evidence_created=create_evidence,
+                    message=f"Rule '{rule_id}' successfully attached to control '{control_id}' in assessment '{assessment_name}'",
+                )
                 
                 if create_evidence:
-                    result["evidence_info"] = response.get("evidenceInfo", {})
-                    result["message"] += " with evidence created."
+                    result.evidence_info = response.get("evidenceInfo", {})
+                    result.message += " with evidence created."
                 
                 return result
             else:
-                return {
-                    "success": False,
-                    "rule_id": rule_id,
-                    "assessment_name": assessment_name,
-                    "error": response.get("error", "Failed to attach rule to control"),
-                    "message": f"Failed to attach rule '{rule_id}' to control '{control_id}'"
-                }
+                return vo.AttachRuleToControlResponseVO(
+                    success=False,
+                    rule_id=rule_id,
+                    assessment_name=assessment_name,
+                    control_id=control_id,
+                    message=f"Failed to attach rule '{rule_id}' to control '{control_id}'",
+                    error=utils.build_structured_error(
+                        response.get("error", "Failed to attach rule to control"),
+                        "rules:attach_rule_to_control",
+                    ),
+                )
                 
         except Exception as e:
-            return {
-                "success": False,
-                "rule_name": rule_id,
-                "assessment_name": assessment_name,
-                "error": f"Failed to attach rule to control: {str(e)}",
-                "message": f"Error occurred while attaching rule to control"
-            }
+            return vo.AttachRuleToControlResponseVO(
+                success=False,
+                rule_name=rule_id,
+                assessment_name=assessment_name,
+                control_id=control_id,
+                message="Error occurred while attaching rule to control",
+                error=utils.build_structured_error(
+                    f"Failed to attach rule to control: {str(e)}",
+                    "rules:attach_rule_to_control",
+                ),
+            )
 
-    @mcp.tool()
-    def fetch_cc_rule_by_id(rule_id: str, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Fetch Cc Rule By Id",read_only=True))
+    def fetch_cc_rule_by_id(
+        rule_id: str, ctx: Context | None = None
+    ) -> vo.RuleFetchResponseVO:
         """
         Fetch rule details by rule id from the **compliancecow**.
 
@@ -412,24 +458,32 @@ if constants.ENABLE_CCOW_API_TOOLS:
             logger.debug(f"fetch_cc_rule_by_id: rule_output: {rule_response}\n")
 
             if len(rule_response) == 0:
-                return {
-                    "success": False,
-                    "rule_id": rule_id,
-                    "error": f"Rule '{rule_id}' not found in ComplianceCow. This means the rule is not published or does not exist in ComplianceCow.",
-                    "next_actions": ["publish_rule", "cancel"]
-                }
+                return vo.RuleFetchResponseVO(
+                    success=False,
+                    rule_id=rule_id,
+                    next_actions=["publish_rule", "cancel"],
+                    error=utils.build_structured_error(
+                        f"Rule '{rule_id}' not found in ComplianceCow. This means the rule is not published or does not exist in ComplianceCow.",
+                        "rules:fetch_cc_rule_by_id",
+                    ),
+                )
 
-            return rule_response
+            return vo.RuleFetchResponseVO(success=True, rule_id=rule_id, data=rule_response)
                 
         except Exception as e:
-            return {
-                "success": False,
-                "error": f"Failed to fetch rule with id '{rule_id}': {str(e)}",
-                "rule_id": rule_id
-            }
+            return vo.RuleFetchResponseVO(
+                success=False,
+                rule_id=rule_id,
+                error=utils.build_structured_error(
+                    f"Failed to fetch rule with id '{rule_id}': {str(e)}",
+                    "rules:fetch_cc_rule_by_id",
+                ),
+            )
 
-    @mcp.tool()
-    def fetch_cc_rule_by_name(rule_name: str, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Fetch Cc Rule By Name",read_only=True))
+    def fetch_cc_rule_by_name(
+        rule_name: str, ctx: Context | None = None
+    ) -> vo.RuleFetchResponseVO:
         """
         Fetch rule details by rule name from the **compliancecow**.
 
@@ -446,24 +500,32 @@ if constants.ENABLE_CCOW_API_TOOLS:
             logger.debug(f"fetch_cc_rule_by_name: rule_output: {rule_response}\n")
 
             if len(rule_response) == 0:
-                return {
-                    "success": False,
-                    "rule_name": rule_name,
-                    "error": f"Rule '{rule_name}' not found in ComplianceCow. This means the rule is not published or does not exist in ComplianceCow.",
-                    "next_actions": ["publish_rule", "cancel"]
-                }
+                return vo.RuleFetchResponseVO(
+                    success=False,
+                    rule_name=rule_name,
+                    next_actions=["publish_rule", "cancel"],
+                    error=utils.build_structured_error(
+                        f"Rule '{rule_name}' not found in ComplianceCow. This means the rule is not published or does not exist in ComplianceCow.",
+                        "rules:fetch_cc_rule_by_name",
+                    ),
+                )
 
-            return rule_response
+            return vo.RuleFetchResponseVO(success=True, rule_name=rule_name, data=rule_response)
                 
         except Exception as e:
-            return {
-                "success": False,
-                "error": f"Failed to fetch rule with id '{rule_name}': {str(e)}",
-                "rule_name": rule_name
-            }
+            return vo.RuleFetchResponseVO(
+                success=False,
+                rule_name=rule_name,
+                error=utils.build_structured_error(
+                    f"Failed to fetch rule with id '{rule_name}': {str(e)}",
+                    "rules:fetch_cc_rule_by_name",
+                ),
+            )
     
-    @mcp.tool()
-    def publish_rule(rule_name: str, cc_rule_name: str = None, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Publish Rule",read_only=False))
+    def publish_rule(
+        rule_name: str, cc_rule_name: str = None, ctx: Context | None = None
+    ) -> vo.PublishRuleResponseVO:
         """
         Publish a rule to make it available for ComplianceCow system.
 
@@ -591,37 +653,43 @@ if constants.ENABLE_CCOW_API_TOOLS:
             logger.debug(f"publish_rule: publish_resp: {publish_resp}\n")
 
             if publish_resp and publish_resp.get("message") and  publish_resp.get("message") == "Rule has been published successfully":
-                resp = {
-                    "success": True,
-                    "published": True,
-                    "rule_info": publish_resp.get("items"),
-                    "message": f"Rule '{rule_name}' published successfully",
-                    "ui_display_message": f"View your published rule on the ComplianceCow Rules Dashboard → {ui_url}"
-                }
+                resp = vo.PublishRuleResponseVO(
+                    success=True,
+                    published=True,
+                    rule_info=publish_resp.get("items"),
+                    message=f"Rule '{rule_name}' published successfully",
+                    ui_display_message=f"View your published rule on the ComplianceCow Rules Dashboard → {ui_url}",
+                )
 
                 if publish_resp.get("ruleId"):
-                    resp["cc_rule_id"] = publish_resp.get("ruleId")
+                    resp.cc_rule_id = publish_resp.get("ruleId")
             
                 return resp
             else:
-                return {
-                    "success": False,
-                    "published": False,
-                    "error": f"Rule '{rule_name}' failed to publish: {publish_resp}",
-                    "rule_info": []
-                }
+                return vo.PublishRuleResponseVO(
+                    success=False,
+                    published=False,
+                    rule_info=[],
+                    error=utils.build_structured_error(
+                        f"Rule '{rule_name}' failed to publish: {publish_resp}",
+                        "rules:publish_rule",
+                    ),
+                )
 
         except Exception as e:
-            return {
-                "success": False,
-                "published": False,
-                "error": f"Failed to publish rule: {str(e)}",
-                "rule_info": []
-            }
+            return vo.PublishRuleResponseVO(
+                success=False,
+                published=False,
+                rule_info=[],
+                error=utils.build_structured_error(
+                    f"Failed to publish rule: {str(e)}",
+                    "rules:publish_rule",
+                ),
+            )
             
 
 
-    @mcp.tool()
+    @mcp.tool(annotations=utils.tool_annotations("Fetch Assessments",read_only=True))
     def fetch_assessments(categoryId: str = "", categoryName: str = "", assessmentName: str = "", ctx: Context | None = None) -> vo.AssessmentListVO:
         """
         Fetch the list of available assessments in ComplianceCow.  
@@ -653,13 +721,23 @@ if constants.ENABLE_CCOW_API_TOOLS:
 
             assessments = rule.get_assessments(params, ctx)
             logger.debug("assessment_output: {}\n".format(assessments))
-            return assessments
+            if isinstance(assessments, vo.AssessmentListVO):
+                return assessments
+            return vo.AssessmentListVO(success=True, assessments=assessments)
 
-        except Exception:
-            return vo.AssessmentListVO(error="Facing internal error")
+        except Exception as e:
+            return vo.AssessmentListVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Unexpected error fetching assessments: {e}",
+                    "rules:fetch_assessments",
+                ),
+            )
 
-    @mcp.tool()
-    def fetch_leaf_controls_of_an_assessment(assessment_id: str = "", ctx: Context | None = None) -> Any:
+    @mcp.tool(annotations=utils.tool_annotations("Fetch Leaf Controls Of An Assessment",read_only=True))
+    def fetch_leaf_controls_of_an_assessment(
+        assessment_id: str = "", ctx: Context | None = None
+    ) -> vo.AssessmentControlListResponseVO:
         """
         To fetch the only the **leaf controls** for a given assessment.
         If assessment_id is not provided use other tools to get the assessment and its id.
@@ -691,15 +769,29 @@ if constants.ENABLE_CCOW_API_TOOLS:
             logger.debug(f"leaf_controls_output: {leaf_controls}\n")
             
             if isinstance(leaf_controls, list):
-                return leaf_controls
+                return vo.AssessmentControlListResponseVO(success=True, controls=leaf_controls)
             else:
-                return {"error": "Failed to fetch leaf controls"}
+                return vo.AssessmentControlListResponseVO(
+                    success=False,
+                    error=utils.build_structured_error(
+                        "Failed to fetch leaf controls",
+                        "rules:fetch_leaf_controls_of_an_assessment",
+                    ),
+                )
         except Exception as e:
-            return  {"error": "Failed to fetch leaf controls"}
+            return vo.AssessmentControlListResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Failed to fetch leaf controls: {e}",
+                    "rules:fetch_leaf_controls_of_an_assessment",
+                ),
+            )
 
         
-    @mcp.tool()
-    def verify_control_in_assessment(assessment_name: str, control_alias: str, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Verify Control In Assessment",read_only=True))
+    def verify_control_in_assessment(
+        assessment_name: str, control_alias: str, ctx: Context | None = None
+    ) -> vo.VerifyControlInAssessmentResponseVO:
         """
         Verify the existence of a specific control by alias within an assessment and confirm it is a leaf control.
 
@@ -738,7 +830,15 @@ if constants.ENABLE_CCOW_API_TOOLS:
             logger.debug("assessment_output_for_control_checking: {}\n".format(assessments))
 
             if len(assessments) == 0:
-                return {"error":f"The requested assessment named {assessment_name} was not found."}
+                return vo.VerifyControlInAssessmentResponseVO(
+                    success=False,
+                    assessment_name=assessment_name,
+                    control_alias=control_alias,
+                    error=utils.build_structured_error(
+                        f"The requested assessment named {assessment_name} was not found.",
+                        "rules:verify_control_in_assessment",
+                    ),
+                )
             
             assessment = assessments[0]
 
@@ -753,52 +853,67 @@ if constants.ENABLE_CCOW_API_TOOLS:
             leaf_controls = rule.get_assessment_controls(control_params)
 
             if not leaf_controls or not isinstance(leaf_controls, list):
-                return {"error": f"No leaf controls found for assessment '{assessment_name}'."}
+                return vo.VerifyControlInAssessmentResponseVO(
+                    success=False,
+                    assessment_name=assessment_name,
+                    control_alias=control_alias,
+                    error=utils.build_structured_error(
+                        f"No leaf controls found for assessment '{assessment_name}'.",
+                        "rules:verify_control_in_assessment",
+                    ),
+                )
             logger.debug(f"leaf_controls_output: {leaf_controls}\n")
 
             for control in leaf_controls:
                 if str(control.alias) == control_alias:
                     if control.ruleId:
-                        return {
-                            "success": True,
-                            "assessment_name": assessment_name,
-                            "control_alias": control_alias,
-                            "control_info": control,
-                            "warning": f"Control '{control_alias}' already has a rule attached (Rule ID: {control.ruleId})",
-                            "message": f"Control found but already has rule attached. Options: 1) View existing rule details, 2) Override with new rule attachment",
-                            "next_actions": ["view_existing_rule", "override_attachment", "cancel"]
-                        }
+                        return vo.VerifyControlInAssessmentResponseVO(
+                            success=True,
+                            assessment_name=assessment_name,
+                            control_alias=control_alias,
+                            control_info=control,
+                            warning=f"Control '{control_alias}' already has a rule attached (Rule ID: {control.ruleId})",
+                            message="Control found but already has rule attached. Options: 1) View existing rule details, 2) Override with new rule attachment",
+                            next_actions=["view_existing_rule", "override_attachment", "cancel"],
+                        )
 
-                    return {
-                        "success": True,
-                        "assessment_name": assessment_name,
-                        "control_alias": control_alias,
-                        "control_info": control,
-                        "message": f"Leaf control '{control_alias}' found and available for rule attachment.",
-                        "ready_for_attachment": True
-                    }
+                    return vo.VerifyControlInAssessmentResponseVO(
+                        success=True,
+                        assessment_name=assessment_name,
+                        control_alias=control_alias,
+                        control_info=control,
+                        message=f"Leaf control '{control_alias}' found and available for rule attachment.",
+                        ready_for_attachment=True,
+                    )
                 
-            return {
-                "success": False,
-                "assessment_name": assessment_name,
-                "control_alias": control_alias,
-                "control_info": control,
-                "error": f"Control alias '{control_alias}' was not found as a leaf control in assessment '{assessment_name}'.",
-                "message": f"The control alias '{control_alias}' is either not present or is not a leaf control in the specified assessment '{assessment_name}'. Please make sure you provide a valid, available leaf control alias.",
-                "next_actions": ["retry_with_valid_leaf_control", "cancel"]
-            }
+            return vo.VerifyControlInAssessmentResponseVO(
+                success=False,
+                assessment_name=assessment_name,
+                control_alias=control_alias,
+                error=utils.build_structured_error(
+                    f"Control alias '{control_alias}' was not found as a leaf control in assessment '{assessment_name}'.",
+                    "rules:verify_control_in_assessment",
+                ),
+                message=f"The control alias '{control_alias}' is either not present or is not a leaf control in the specified assessment '{assessment_name}'. Please make sure you provide a valid, available leaf control alias.",
+                next_actions=["retry_with_valid_leaf_control", "cancel"],
+            )
                     
         except Exception as e:
-            return {
-                "success": False,
-                "assessment_name": assessment_name,
-                "control_alias": control_alias,
-                "error": f"Failed to find control: {str(e)}",
-                "message": f"Error occurred while searching for the control **'{control_alias}'** in assessment **'{assessment_name}'**."
-            }
+            return vo.VerifyControlInAssessmentResponseVO(
+                success=False,
+                assessment_name=assessment_name,
+                control_alias=control_alias,
+                error=utils.build_structured_error(
+                    f"Failed to find control: {str(e)}",
+                    "rules:verify_control_in_assessment",
+                ),
+                message=f"Error occurred while searching for the control **'{control_alias}'** in assessment **'{assessment_name}'**.",
+            )
 
-    @mcp.tool()
-    def check_applications_publish_status(app_info: List[Dict], ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Check Applications Publish Status",read_only=True))
+    def check_applications_publish_status(
+        app_info: List[Dict], ctx: Context | None = None
+    ) -> vo.ApplicationsPublishStatusResponseVO:
         """
             Check publication status for each application in the provided list.
 
@@ -821,27 +936,32 @@ if constants.ENABLE_CCOW_API_TOOLS:
             )
 
             if len(app_resp) > 0:
-                return {
-                    "success": True,
-                    "app_info": app_resp
-                }
+                return vo.ApplicationsPublishStatusResponseVO(success=True, app_info=app_resp)
             else:
-                return {
-                    "success": False,
-                    "error": "No application details found",
-                    "app_info": []
-                }
+                return vo.ApplicationsPublishStatusResponseVO(
+                    success=False,
+                    app_info=[],
+                    error=utils.build_structured_error(
+                        "No application details found",
+                        "rules:check_applications_publish_status",
+                    ),
+                )
 
         except Exception as e:
-            return {
-                "success": False,
-                "error": f"Failed to fetch application information: {str(e)}",
-                "app_info": []
-            }
+            return vo.ApplicationsPublishStatusResponseVO(
+                success=False,
+                app_info=[],
+                error=utils.build_structured_error(
+                    f"Failed to fetch application information: {str(e)}",
+                    "rules:check_applications_publish_status",
+                ),
+            )
 
 
-    @mcp.tool()
-    def check_rule_publish_status(rule_name: str, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Check Rule Publish Status",read_only=True))
+    def check_rule_publish_status(
+        rule_name: str, ctx: Context | None = None
+    ) -> vo.RulePublishStatusResponseVO:
         """
         Check if a rule is already published.
 
@@ -874,31 +994,36 @@ if constants.ENABLE_CCOW_API_TOOLS:
 
             # Check if response has items and if items list is not empty
             if rule_resp and rule_resp.get("items") and len(rule_resp.get("items", [])) > 0:
-                return {
-                    "success": True,
-                    "published": True,
-                    "rule_info": rule_resp.get("items"),
-                    "message": f"Rule '{rule_name}' is already published"
-                }
+                return vo.RulePublishStatusResponseVO(
+                    success=True,
+                    published=True,
+                    rule_info=rule_resp.get("items"),
+                    message=f"Rule '{rule_name}' is already published",
+                )
             else:
-                return {
-                    "success": True,
-                    "published": False,
-                    "rule_info": [],
-                    "message": f"Rule '{rule_name}' is not published"
-                }
+                return vo.RulePublishStatusResponseVO(
+                    success=True,
+                    published=False,
+                    rule_info=[],
+                    message=f"Rule '{rule_name}' is not published",
+                )
 
         except Exception as e:
-            return {
-                "success": False,
-                "published": False,
-                "error": f"Failed to check rule publish status: {str(e)}",
-                "rule_info": []
-            }
+            return vo.RulePublishStatusResponseVO(
+                success=False,
+                published=False,
+                rule_info=[],
+                error=utils.build_structured_error(
+                    f"Failed to check rule publish status: {str(e)}",
+                    "rules:check_rule_publish_status",
+                ),
+            )
 
 
-    @mcp.tool()
-    def publish_application(rule_name: str, app_info: List[Dict], ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Publish Application",read_only=False))
+    def publish_application(
+        rule_name: str, app_info: List[Dict], ctx: Context | None = None
+    ) -> vo.PublishApplicationResponseVO:
         """
         Publish applications to make them available for rule execution.
         
@@ -931,39 +1056,48 @@ if constants.ENABLE_CCOW_API_TOOLS:
                 
                 if failed_apps:
                     failed_app_names = [app.get("appName", "Unknown") for app in failed_apps]
-                    return {
-                        "success": False,
-                        "published": False,
-                        "error": f"Failed applications: {', '.join(failed_app_names)}",
-                        "successful_apps": successful_apps,
-                        "failed_apps": failed_apps,
-                        "message": f"Some applications failed to publish for rule '{rule_name}'"
-                    }
+                    return vo.PublishApplicationResponseVO(
+                        success=False,
+                        published=False,
+                        successful_apps=successful_apps,
+                        failed_apps=failed_apps,
+                        message=f"Some applications failed to publish for rule '{rule_name}'",
+                        error=utils.build_structured_error(
+                            f"Failed applications: {', '.join(failed_app_names)}",
+                            "rules:publish_application",
+                        ),
+                    )
                 else:
-                    return {
-                        "success": True,
-                        "published": True,
-                        "successful_apps": successful_apps,
-                        "failed_apps": [],
-                        "message": f"All applications for rule '{rule_name}' published successfully"
-                    }
+                    return vo.PublishApplicationResponseVO(
+                        success=True,
+                        published=True,
+                        successful_apps=successful_apps,
+                        failed_apps=[],
+                        message=f"All applications for rule '{rule_name}' published successfully",
+                    )
             else:
-                return {
-                    "success": False,
-                    "published": False,
-                    "error": "No response received from publish endpoint",
-                    "successful_apps": [],
-                    "failed_apps": []
-                }
+                return vo.PublishApplicationResponseVO(
+                    success=False,
+                    published=False,
+                    successful_apps=[],
+                    failed_apps=[],
+                    error=utils.build_structured_error(
+                        "No response received from publish endpoint",
+                        "rules:publish_application",
+                    ),
+                )
 
         except Exception as e:
-            return {
-                "success": False,
-                "published": False,
-                "error": f"Failed to publish applications: {e}",
-                "successful_apps": [],
-                "failed_apps": []
-            }
+            return vo.PublishApplicationResponseVO(
+                success=False,
+                published=False,
+                successful_apps=[],
+                failed_apps=[],
+                error=utils.build_structured_error(
+                    f"Failed to publish applications: {e}",
+                    "rules:publish_application",
+                ),
+            )
 
     @mcp.prompt()
     def rule_input_collection():
@@ -1043,8 +1177,8 @@ if constants.ENABLE_CCOW_API_TOOLS:
         **Execution is not optional. It happens NOW, not later.**
         """
 
-    @mcp.tool()
-    async def list_assets(ctx: Context | None = None) -> dict:
+    @mcp.tool(annotations=utils.tool_annotations("List Assets",read_only=True))
+    async def list_assets(ctx: Context | None = None) -> vo.AssetListResponseVO:
         """
             Retrieve all available assets (integration plans).
             
@@ -1062,18 +1196,10 @@ if constants.ENABLE_CCOW_API_TOOLS:
             logger.debug("assets output: {}\n".format(json.dumps(output) if isinstance(output, dict) else output))
             
             # Handle error response
-            if isinstance(output, str):
+            output_error = utils.build_structured_error(output, "rules:list_assets")
+            if output_error:
                 logger.error("list_assets error: {}\n".format(output))
-                return {"success": False, "error": output, "assets": []}
-            
-            if isinstance(output, dict):
-                if "Message" in output:
-                    logger.error("list_assets error: {}\n".format(output))
-                    return {"success": False, "error": output, "assets": []}
-                
-                if "error" in output:
-                    logger.error("list_assets error: {}\n".format(output.get("error")))
-                    return {"success": False, "error": output.get("error", "Facing internal error"), "assets": []}
+                return vo.AssetListResponseVO(success=False, assets=[], error=output_error)
             
             assets: List[vo.AssetVO] = []
             if isinstance(output, dict) and "items" in output:
@@ -1083,15 +1209,21 @@ if constants.ENABLE_CCOW_API_TOOLS:
             
             logger.debug("modified assets: {}\n".format([asset.model_dump() for asset in assets]))
 
-            return {"success": True, "assets": [asset.model_dump() for asset in assets]}
+            return vo.AssetListResponseVO(success=True, assets=assets)
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.error("list_assets error: {}\n".format(e))
-            return {"success": False, "error": f"Unexpected error listing assets: {e}", "assets": []}
+            return vo.AssetListResponseVO(
+                success=False,
+                assets=[],
+                error=utils.build_structured_error(
+                    f"Unexpected error listing assets: {e}", "rules:list_assets"
+                ),
+            )
 
 
-    @mcp.tool()
-    async def list_checks(assetId: str, ctx: Context | None = None) -> dict:
+    @mcp.tool(annotations=utils.tool_annotations("List Checks",read_only=True))
+    async def list_checks(assetId: str, ctx: Context | None = None) -> vo.CheckListResponseVO:
         """
             Retrieve all checks associated with an asset.
             
@@ -1112,34 +1244,38 @@ if constants.ENABLE_CCOW_API_TOOLS:
             logger.debug("checks output: {}\n".format(json.dumps(output) if isinstance(output, dict) else output))
             
             # Handle error response
-            if isinstance(output, str):
+            output_error = utils.build_structured_error(output, "rules:list_checks")
+            if output_error:
                 logger.error("list_checks error: {}\n".format(output))
-                return {"success": False, "error": output, "checks": []}
+                return vo.CheckListResponseVO(success=False, checks=[], error=output_error)
             
-            if isinstance(output, dict):
-                if "Message" in output:
-                    logger.error("list_checks error: {}\n".format(output))
-                    return {"success": False, "error": output, "checks": []}
-                
-                if "error" in output:
-                    logger.error("list_checks error: {}\n".format(output.get("error")))
-                    return {"success": False, "error": output.get("error", "Facing internal error"), "checks": []}
-            
-            checks = []
+            checks: list[vo.CheckItemVO] = []
             if isinstance(output, dict) and "items" in output:
                 for item in output["items"]:
                     if "name" in item and "id" in item:
-                        checks.append({"name": item["name"], "id": item["id"], "controlId": item["planControlId"]})
+                        checks.append(
+                            vo.CheckItemVO(
+                                name=item["name"],
+                                id=item["id"],
+                                controlId=item["planControlId"],
+                            )
+                        )
             
-            return {"success": True, "checks": checks}
+            return vo.CheckListResponseVO(success=True, checks=checks)
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.error("list_checks error: {}\n".format(e))
-            return {"success": False, "error": f"Unexpected error listing checks: {e}", "checks": []}
+            return vo.CheckListResponseVO(
+                success=False,
+                checks=[],
+                error=utils.build_structured_error(
+                    f"Unexpected error listing checks: {e}", "rules:list_checks"
+                ),
+            )
 
 
-    @mcp.tool()
-    async def get_asset_control_hierarchy(assetId: str, ctx: Context | None = None) -> dict:
+    @mcp.tool(annotations=utils.tool_annotations("Get Asset Control Hierarchy",read_only=True))
+    async def get_asset_control_hierarchy( assetId: str, ctx: Context | None = None) -> vo.AssetControlHierarchyResponseVO:
         """
             Retrieve the complete control hierarchy for an asset with nested plan controls.
             Returns only id and name for each control while preserving the full hierarchical structure.
@@ -1156,18 +1292,18 @@ if constants.ENABLE_CCOW_API_TOOLS:
                     - planControls (List[dict]): Nested child controls (
                 - error (Optional[str]): An error message if any issues occurred during retrieval. 
         """
-        def extract_control_hierarchy(control: dict) -> dict:
+        def extract_control_hierarchy(control: dict) -> vo.ControlHierarchyItemVO:
             """
             Recursively extract only id and name from a control and its nested planControls.
             Preserves the hierarchy structure.
             """
-            result = {
-                "id": control.get("id", ""),
-                "name": control.get("name", "")
-            }
+            result = vo.ControlHierarchyItemVO(
+                id=control.get("id", ""),
+                name=control.get("name", ""),
+            )
             
             if "planControls" in control and isinstance(control["planControls"], list) and len(control["planControls"]) > 0:
-                result["planControls"] = [extract_control_hierarchy(child) for child in control["planControls"]]
+                result.planControls = [extract_control_hierarchy(child) for child in control["planControls"]]
             
             return result
         
@@ -1177,35 +1313,40 @@ if constants.ENABLE_CCOW_API_TOOLS:
             output = await utils.make_API_call_to_CCow_and_get_response(f"{constants.URL_PLANS}/{assetId}", "GET", ctx=ctx)
             logger.debug("plan output: {}\n".format(json.dumps(output) if isinstance(output, dict) else output))
             
-            if isinstance(output, str):
+            output_error = utils.build_structured_error(output, "rules:get_asset_control_hierarchy")
+            if output_error:
                 logger.error("get_asset_control_hierarchy error: {}\n".format(output))
-                return {"success": False, "error": output, "planControls": []}
-            
-            if isinstance(output, dict):
-                if "Message" in output:
-                    logger.error("get_asset_control_hierarchy error: {}\n".format(output))
-                    return {"success": False, "error": output, "planControls": []}
-                
-                if "error" in output:
-                    logger.error("get_asset_control_hierarchy error: {}\n".format(output.get("error")))
-                    return {"success": False, "error": output.get("error", "Facing internal error"), "planControls": []}
+                return vo.AssetControlHierarchyResponseVO(success=False, planControls=[], error=output_error)
             
             plan_controls = []
             if isinstance(output, dict) and "planControls" in output and isinstance(output["planControls"], list):
                 for control in output["planControls"]:
                     plan_controls.append(extract_control_hierarchy(control))
             
-            logger.debug("modified plan controls hierarchy: {}\n".format(json.dumps(plan_controls, indent=2)))
+            logger.debug(f"modified plan controls hierarchy: {plan_controls}")
 
-            return {"success": True, "planControls": plan_controls}
+            return vo.AssetControlHierarchyResponseVO(success=True, planControls=plan_controls)
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.error("get_asset_control_hierarchy error: {}\n".format(e))
-            return {"success": False, "error": f"Unexpected error getting asset control hierarchy: {e}", "planControls": []}
+            return vo.AssetControlHierarchyResponseVO(
+                success=False,
+                planControls=[],
+                error=utils.build_structured_error(
+                    f"Unexpected error getting asset control hierarchy: {e}",
+                    "rules:get_asset_control_hierarchy",
+                ),
+            )
 
 
-    @mcp.tool()
-    async def add_check_to_asset(assetId: str, parentControlId: str, checkName: str, checkDescription: str, ctx: Context | None = None) -> dict:
+    @mcp.tool(annotations=utils.tool_annotations("Add Check To Asset",read_only=False))
+    async def add_check_to_asset(
+        assetId: str,
+        parentControlId: str,
+        checkName: str,
+        checkDescription: str,
+        ctx: Context | None = None,
+    ) -> vo.AddCheckToAssetResponseVO:
         """
             Add a new control and a new check to an asset under a specified parent control.
             The check will be attached to newly created control beneath the parent control.
@@ -1233,30 +1374,34 @@ if constants.ENABLE_CCOW_API_TOOLS:
             logger.debug("add_check_to_asset output: {}\n".format(json.dumps(output) if isinstance(output, dict) else output))
             
 
-            if isinstance(output, str):
+            output_error = utils.build_structured_error(output, "rules:add_check_to_asset")
+            if output_error:
                 logger.error("add_check_to_asset error: {}\n".format(output))
-                return {"success": False, "error": output}
-            
-            if isinstance(output, dict):
-                if "Message" in output:
-                    logger.error("add_check_to_asset error: {}\n".format(output))
-                    return {"success": False, "error": output}
-                
-                if "error" in output:
-                    logger.error("add_check_to_asset error: {}\n".format(output.get("error")))
-                    return {"success": False, "error": output.get("error")}
+                return vo.AddCheckToAssetResponseVO(success=False, error=output_error)
             
             controlId = output.get("id","")
 
-            return {"success": True, "controlId": controlId}
+            return vo.AddCheckToAssetResponseVO(success=True, controlId=controlId)
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.error("add_check_to_asset error: {}\n".format(e))
-            return {"success": False, "error": f"Unexpected error adding check to asset: {e}"}
+            return vo.AddCheckToAssetResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Unexpected error adding check to asset: {e}",
+                    "rules:add_check_to_asset",
+                ),
+            )
 
 
-    @mcp.tool()
-    async def create_asset_and_check(assetName: str, controlName: str, checkName: str, checkDescription: str, ctx: Context | None = None) -> dict:
+    @mcp.tool(annotations=utils.tool_annotations("Create Asset And Check",read_only=False))
+    async def create_asset_and_check(
+        assetName: str,
+        controlName: str,
+        checkName: str,
+        checkDescription: str,
+        ctx: Context | None = None,
+    ) -> vo.CreateAssetAndCheckResponseVO:
         """
             Create a new asse with an initial control and check structure.
             The asset will be created with a hierarchical structure: asset -> parentcontrol -> control -> check.
@@ -1278,7 +1423,13 @@ if constants.ENABLE_CCOW_API_TOOLS:
             pattern = r"^[A-Za-z0-9]+$"
             match = re.search(pattern, checkName)
             if not match:
-                return {"success": False, "error": "check name should match regex `^[A-Za-z0-9]+$`"}
+                return vo.CreateAssetAndCheckResponseVO(
+                    success=False,
+                    error=utils.build_structured_error(
+                        "check name should match regex `^[A-Za-z0-9]+$`",
+                        "rules:create_asset_and_check",
+                    ),
+                )
 
             payload = {
                 "name": assetName,
@@ -1316,18 +1467,10 @@ if constants.ENABLE_CCOW_API_TOOLS:
             logger.debug("create_asset output: {}\n".format(json.dumps(output) if isinstance(output, dict) else output))
 
             # Handle error response
-            if isinstance(output, str):
+            output_error = utils.build_structured_error(output, "rules:create_asset_and_check")
+            if output_error:
                 logger.error("create_asset error: {}\n".format(output))
-                return {"success": False, "error": output}
-            
-            if isinstance(output, dict):
-                if "Message" in output:
-                    logger.error("create_asset error: {}\n".format(output))
-                    return {"success": False, "error": output}
-                
-                if "error" in output:
-                    logger.error("create_asset error: {}\n".format(output.get("error")))
-                    return {"success": False, "error": output.get("error")}
+                return vo.CreateAssetAndCheckResponseVO(success=False, error=output_error)
 
             asset_id = output.get("id", "") if isinstance(output, dict) else ""
 
@@ -1360,26 +1503,39 @@ if constants.ENABLE_CCOW_API_TOOLS:
                                 if evidences:
                                     check_id = evidences[0].get("id", "")
 
-            response = {
-                "success": True,
-                "assetId": asset_id,
-                "parentControlId": parent_control_id,
-                "controlId": control_id,
-                "checkId": check_id,
-            }
+            response = vo.CreateAssetAndCheckDataVO(
+                assetId=asset_id,
+                parentControlId=parent_control_id,
+                controlId=control_id,
+                checkId=check_id,
+            )
 
-            logger.debug("created response: {}\n".format(response))
+            logger.debug("created response: {}\n".format(response.model_dump()))
 
-            return {"success": True, "response": response}
+            return vo.CreateAssetAndCheckResponseVO(success=True, response=response)
 
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.error("create_asset error: {}\n".format(e))
-            return {"success": False, "error": f"Unexpected error creating asset: {e}"}
+            return vo.CreateAssetAndCheckResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Unexpected error creating asset: {e}",
+                    "rules:create_asset_and_check",
+                ),
+            )
 
 
-    @mcp.tool()
-    async def schedule_asset_execution(assetId: str, runPrefixName: str, description: str, cronTab: str,controlPeriod: str,controlDuration: int, ctx: Context | None = None) -> dict:
+    @mcp.tool(annotations=utils.tool_annotations("Schedule Asset Execution",read_only=False))
+    async def schedule_asset_execution(
+        assetId: str,
+        runPrefixName: str,
+        description: str,
+        cronTab: str,
+        controlPeriod: str,
+        controlDuration: int,
+        ctx: Context | None = None,
+    ) -> vo.ScheduleAssetExecutionResponseVO:
         """
             Schedule automated execution for a asset.
 
@@ -1417,25 +1573,16 @@ if constants.ENABLE_CCOW_API_TOOLS:
             )
 
             if not assetId or not str(assetId).strip():
-                return {"success": False, "error": "assetId is mandatory and cannot be empty"}
+                return vo.ScheduleAssetExecutionResponseVO(success=False, error=utils.build_structured_error("assetId is mandatory and cannot be empty", "rules:schedule_asset_execution"))
 
             if not runPrefixName or not str(runPrefixName).strip():
-                return {
-                    "success": False,
-                    "error": "runPrefixName is mandatory and must be explicitly provided by the user",
-                }
+                return vo.ScheduleAssetExecutionResponseVO(success=False, error=utils.build_structured_error("runPrefixName is mandatory and must be explicitly provided by the user", "rules:schedule_asset_execution"))
 
             if not description or not str(description).strip():
-                return {
-                    "success": False,
-                    "error": "description is mandatory and must be explicitly provided by the user",
-                }
+                return vo.ScheduleAssetExecutionResponseVO(success=False, error=utils.build_structured_error("description is mandatory and must be explicitly provided by the user", "rules:schedule_asset_execution"))
 
             if not cronTab or not str(cronTab).strip():
-                return {
-                    "success": False,
-                    "error": "cronTab is mandatory and must be explicitly constructed from the user's schedule",
-                }
+                return vo.ScheduleAssetExecutionResponseVO(success=False, error=utils.build_structured_error("cronTab is mandatory and must be explicitly constructed from the user's schedule", "rules:schedule_asset_execution"))
 
             # appScopeId = ""
             # appScopeName = ""
@@ -1505,38 +1652,30 @@ if constants.ENABLE_CCOW_API_TOOLS:
                 json.dumps(output) if isinstance(output, dict) else output,
             )
 
-            if isinstance(output, str):
+            output_error = utils.build_structured_error(output, "rules:schedule_asset_execution")
+            if output_error:
                 logger.error("schedule_asset_execution error: %s\n", output)
-                return {"success": False, "error": output}
-
-            if isinstance(output, dict):
-                if "Message" in output:
-                    logger.error("schedule_asset_execution error: %s\n", output)
-                    return {"success": False, "error": output}
-
-                if "error" in output:
-                    logger.error(
-                        "schedule_asset_execution error: %s\n", output.get("error")
-                    )
-                    return {"success": False, "error": output.get("error")}
+                return vo.ScheduleAssetExecutionResponseVO(success=False, error=output_error)
 
             schedule_id = output.get("id", "") if isinstance(output, dict) else ""
 
-            return {
-                "success": True,
-                "scheduleId": schedule_id,
-            }
+            return vo.ScheduleAssetExecutionResponseVO(success=True, scheduleId=schedule_id)
 
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.error("schedule_asset_execution error: %s\n", e)
-            return {
-                "success": False,
-                "error": f"Unexpected error scheduling asset execution: {e}",
-            }
+            return vo.ScheduleAssetExecutionResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Unexpected error scheduling asset execution: {e}",
+                    "rules:schedule_asset_execution",
+                ),
+            )
 
-    @mcp.tool()
-    async def list_asset_schedules( assetId: str, ctx: Context | None = None) -> dict:
+    @mcp.tool(annotations=utils.tool_annotations("List Asset Schedules",read_only=True))
+    async def list_asset_schedules(
+        assetId: str, ctx: Context | None = None
+    ) -> vo.AssetScheduleListResponseVO:
         """
         List schedules for a given asset.
 
@@ -1552,10 +1691,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
             logger.info("list_asset_schedules: assetId: %s", assetId)
 
             if not assetId or not str(assetId).strip():
-                return {
-                    "success": False,
-                    "error": "assetId is mandatory and cannot be empty",
-                }
+                return vo.AssetScheduleListResponseVO(success=False, error=utils.build_structured_error("assetId is mandatory and cannot be empty", "rules:list_asset_schedules"))
 
             payload = {
                 "assessmentId": str(assetId).strip()
@@ -1568,49 +1704,45 @@ if constants.ENABLE_CCOW_API_TOOLS:
                 json.dumps(output) if isinstance(output, dict) else output,
             )
 
-            if isinstance(output, str):
-                return {"success": False, "error": output}
-
-            if isinstance(output, dict):
-                if "Message" in output:
-                    return {"success": False, "error": output}
-
-                if "error" in output:
-                    return {"success": False, "error": output.get("error")}
+            output_error = utils.build_structured_error(output, "rules:list_asset_schedules")
+            if output_error:
+                return vo.AssetScheduleListResponseVO(success=False, error=output_error)
 
             items = output.get("items", [])
-            filtered_items = []
+            filtered_items: list[vo.AssetScheduleItemVO] = []
 
             if isinstance(items, list):
                 for item in items:
                     if not isinstance(item, dict):
                         continue
                     filtered_items.append(
-                        {
-                            "id": item.get("id"),
-                            "name": item.get("name"),
-                            "description": item.get("description"),
-                            "controlPeriod": item.get("controlPeriod"),
-                            "cronTab": item.get("cronTab"),
-                            "status": item.get("status"),
-                        }
+                        vo.AssetScheduleItemVO(
+                            id=item.get("id"),
+                            name=item.get("name"),
+                            description=item.get("description"),
+                            controlPeriod=item.get("controlPeriod"),
+                            cronTab=item.get("cronTab"),
+                            status=item.get("status"),
+                        )
                     )
 
-            return {
-                "success": True,
-                "items": filtered_items,
-            }
+            return vo.AssetScheduleListResponseVO(success=True, items=filtered_items)
 
         except Exception as e:
             logger.error(traceback.format_exc())
-            return {
-                "success": False,
-                "error": f"Unexpected error listing schedules: {e}",
-            }
+            return vo.AssetScheduleListResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Unexpected error listing schedules: {e}",
+                    "rules:list_asset_schedules",
+                ),
+            )
 
 
-    @mcp.tool()
-    async def delete_asset_schedule( scheduleId: str, ctx: Context | None = None) -> dict:
+    @mcp.tool(annotations=utils.tool_annotations("Delete Asset Schedule",read_only=False))
+    async def delete_asset_schedule(
+        scheduleId: str, ctx: Context | None = None
+    ) -> vo.DeleteAssetScheduleResponseVO:
         """
         Delete an existing assessment schedule.
 
@@ -1625,10 +1757,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
             logger.info("delete_asset_schedule: scheduleId: %s", scheduleId)
 
             if not scheduleId or not str(scheduleId).strip():
-                return {
-                    "success": False,
-                    "error": "scheduleId is mandatory and cannot be empty",
-                }
+                return vo.DeleteAssetScheduleResponseVO(success=False, error=utils.build_structured_error("scheduleId is mandatory and cannot be empty", "rules:delete_asset_schedule"))
 
             url = f"{constants.URL_ASSESSMENT_SCHEDULE}/{str(scheduleId).strip()}"
 
@@ -1639,34 +1768,29 @@ if constants.ENABLE_CCOW_API_TOOLS:
                 json.dumps(output) if isinstance(output, dict) else output,
             )
 
-            if isinstance(output, str):
-                return {"success": False, "error": output}
+            output_error = utils.build_structured_error(output, "rules:delete_asset_schedule")
+            if output_error:
+                return vo.DeleteAssetScheduleResponseVO(success=False, error=output_error)
 
-            if isinstance(output, dict):
-                if "Message" in output:
-                    return {"success": False, "error": output}
-
-                if "error" in output:
-                    return {"success": False, "error": output.get("error")}
-
-            return {
-                "success": True
-            }
+            return vo.DeleteAssetScheduleResponseVO(success=True)
 
         except Exception as e:
             logger.error(traceback.format_exc())
-            return {
-                "success": False,
-                "error": f"Unexpected error deleting schedule: {e}",
-            }
+            return vo.DeleteAssetScheduleResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Unexpected error deleting schedule: {e}",
+                    "rules:delete_asset_schedule",
+                ),
+            )
 
-    @mcp.tool()
+    @mcp.tool(annotations=utils.tool_annotations("Suggest Control Config Citations",read_only=True))
     async def suggest_control_config_citations(
         controlName: str,
         description: str,
         controlId: str = "",
         ctx: Context | None = None
-    ) -> dict:
+    ) -> vo.ControlCitationSuggestionResponseVO:
         """
         Suggest control citations for a given control name or description.
         
@@ -1708,7 +1832,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
 
             if not controlName or not str(controlName).strip():
                 logger.error("suggest_control_config_citations error: control name is mandatory and cannot be empty\n")
-                return {"success": False, "error": "control name is mandatory and cannot be empty"}
+                return vo.ControlCitationSuggestionResponseVO(success=False, error=utils.build_structured_error("control name is mandatory and cannot be empty", "rules:suggest_control_config_citations"))
             
             payload = {
                 "assessment_type": "asset",
@@ -1726,62 +1850,72 @@ if constants.ENABLE_CCOW_API_TOOLS:
             
             logger.debug("suggest_control_config_citations payload: {}\n".format(json.dumps(payload)))
             
-            resp = await utils.make_API_call_to_CCow(payload, constants.URL_GET_SIMILAR_CONTROLS, ctx=ctx)
+            resp = await utils.make_API_call_to_CCow_and_get_response(
+                constants.URL_GET_SIMILAR_CONTROLS,
+                "POST",
+                payload,
+                ctx=ctx,
+            )
             logger.debug("suggest_control_config_citations output: {}\n".format(json.dumps(resp) if isinstance(resp, dict) else resp))
             
-            if isinstance(resp, str):
+            response_error = utils.build_structured_error(resp, "rules:suggest_control_config_citations")
+            if response_error:
                 logger.error("suggest_control_config_citations error: {}\n".format(resp))
-                return {"success": False, "error": resp}
+                return vo.ControlCitationSuggestionResponseVO(success=False, error=response_error)
             
             if isinstance(resp, dict):
-                if "error" in resp:
-                    logger.error("suggest_control_config_citations error: {}\n".format(resp.get("error")))
-                    return {"success": False, "error": resp.get("error")}
-                
-                if "Message" in resp:
-                    logger.error("suggest_control_config_citations error: {}\n".format(resp))
-                    return {"success": False, "error": resp}
                 
                 items = resp.get("items", [])
                 authorityDocument = resp.get("authorityDocument", "")
-                abstracted_items = []
+                abstracted_items: list[vo.ControlCitationSuggestionItemVO] = []
                 for item in items:
                     if isinstance(item, dict):
-                        abstracted_item = {
-                            "inputControlName": item.get("inputControlName", ""),
-                            "controlId": item.get("controlId", ""),
-                            "suggestions": []
-                        }
+                        abstracted_item = vo.ControlCitationSuggestionItemVO(
+                            inputControlName=item.get("inputControlName", ""),
+                            controlId=item.get("controlId", ""),
+                            suggestions=[],
+                        )
                         suggestions = item.get("suggestions", [])
                         for suggestion in suggestions:
                             if isinstance(suggestion, dict):
-                                abstracted_suggestion = {
-                                    "Name": suggestion.get("Name", ""),
-                                    "Control ID": suggestion.get("Control ID", ""),
-                                    "Control Classification": suggestion.get("Control Classification", ""),
-                                    "Impact Zone": suggestion.get("Impact Zone", ""),
-                                    "Control Requirement": suggestion.get("Control Requirement", ""),
-                                    "Sort ID": suggestion.get("Sort ID", ""),
-                                    "Control Type": suggestion.get("Control Type", ""),
-                                    "Score": suggestion.get("Score", 0.0)
-                                }
-                                abstracted_item["suggestions"].append(abstracted_suggestion)
+                                abstracted_item.suggestions.append(
+                                    vo.ControlCitationSuggestionVO(
+                                        Name=suggestion.get("Name", ""),
+                                        control_id=str(suggestion.get("Control ID", "")),
+                                        control_classification=suggestion.get("Control Classification", ""),
+                                        impact_zone=suggestion.get("Impact Zone", ""),
+                                        control_requirement=suggestion.get("Control Requirement", ""),
+                                        sort_id=suggestion.get("Sort ID", ""),
+                                        control_type=suggestion.get("Control Type", ""),
+                                        score=suggestion.get("Score", 0.0),
+                                    )
+                                )
                         abstracted_items.append(abstracted_item)
                 
                 logger.info(f"suggest_control_config_citations: Successfully retrieved {len(abstracted_items)} suggestion item(s)\n")
-                return {"success": True, "items": abstracted_items,"authorityDocument": authorityDocument, "next_action": "attachToControl"}
+                return vo.ControlCitationSuggestionResponseVO(
+                    success=True,
+                    items=abstracted_items,
+                    authorityDocument=authorityDocument,
+                    next_action="attachToControl",
+                )
             
             logger.error("suggest_control_config_citations error: Unexpected response type: {}\n".format(type(resp)))
-            return {"success": False, "error": f"Unexpected response type: {resp}"}
+            return vo.ControlCitationSuggestionResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {resp}", "rules:suggest_control_config_citations"))
             
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.error("suggest_control_config_citations error: {}\n".format(e))
-            return {"success": False, "error": f"Unexpected error suggesting control citations: {e}"}
+            return vo.ControlCitationSuggestionResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error suggesting control citations: {e}", "rules:suggest_control_config_citations"))
 
 
-    @mcp.tool()
-    async def add_citation_to_asset_control(assetControlId: str, authorityDocument: str, authorityDocumentControlId: str, ctx: Context | None = None) -> dict:
+    @mcp.tool(annotations=utils.tool_annotations("Add Citation To Asset Control",read_only=False))
+    async def add_citation_to_asset_control(
+        assetControlId: str,
+        authorityDocument: str,
+        authorityDocumentControlId: str,
+        ctx: Context | None = None,
+    ) -> vo.AddCitationToAssetControlResponseVO:
         """
             Create a new asse with an initial control and check structure.
             The asset will be created with a hierarchical structure: asset -> control -> check.
@@ -1807,28 +1941,22 @@ if constants.ENABLE_CCOW_API_TOOLS:
             output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_CONTROLS+"/"+assetControlId+"/link-source-control", "POST", payload, ctx=ctx)
             logger.debug("add_citation_to_asset_control output: {}\n".format(json.dumps(output) if isinstance(output, dict) else output))
 
-            if isinstance(output, str):
+            output_error = utils.build_structured_error(output, "rules:add_citation_to_asset_control")
+            if output_error:
                 logger.error("add_citation_to_asset_control error: {}\n".format(output))
-                return {"success": False, "error": output}
-            
-            if isinstance(output, dict):
-                if "Message" in output:
-                    logger.error("add_citation_to_asset_control error: {}\n".format(output))
-                    return {"success": False, "error": output}
-                
-                if "error" in output:
-                    logger.error("add_citation_to_asset_control error: {}\n".format(output.get("error")))
-                    return {"success": False, "error": output.get("error")}
+                return vo.AddCitationToAssetControlResponseVO(success=False, error=output_error)
 
-            return {"success": True}
+            return vo.AddCitationToAssetControlResponseVO(success=True)
 
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.error("add_citation_to_asset_control error: {}\n".format(e))
-            return {"success": False, "error": f"Unexpected error adding citation to asset control: {e}"}
+            return vo.AddCitationToAssetControlResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error adding citation to asset control: {e}", "rules:add_citation_to_asset_control"))
 
-    @mcp.tool()
-    def verify_control_automation(control_id: str, ctx: Optional[Context] = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Verify Control Automation",read_only=True))
+    def verify_control_automation(
+        control_id: str, ctx: Optional[Context] = None
+    ) -> vo.ControlAutomationResponseVO:
         """
         Verify if a control is automated or not based on the presence of ruleId.
         If ruleId exists, fetch and return basic rule information.
@@ -1849,69 +1977,89 @@ if constants.ENABLE_CCOW_API_TOOLS:
             )
             
             if isinstance(control_response, str) or (isinstance(control_response, dict) and "error" in control_response):
-                return {
-                    "error": "Unable to retrieve control details",
-                    "control_id": control_id,
-                    "automated": False
-                }
+                return vo.ControlAutomationResponseVO(
+                    success=False,
+                    control_id=control_id,
+                    automated=False,
+                    error=utils.build_structured_error(
+                        "Unable to retrieve control details",
+                        "rules:verify_control_automation",
+                    ),
+                )
             
             # Check if ruleId exists
             rule_id = control_response.get("ruleId")
             
             if not rule_id:
-                return {
-                    "control_id": control_id,
-                    "control_name": control_response.get("name", "Unknown"),
-                    "automated": False,
-                    "message": "This control is not automated. No rule is associated with it."
-                }
+                return vo.ControlAutomationResponseVO(
+                    success=True,
+                    control_id=control_id,
+                    control_name=control_response.get("name", "Unknown"),
+                    automated=False,
+                    message="This control is not automated. No rule is associated with it.",
+                )
             
             # Control is automated, fetch rule details
             try:
                 rule_details = fetch_cc_rule_by_id(rule_id, ctx)
                 
                 if isinstance(rule_details, dict) and "error" not in rule_details:
-                    return {
-                        "control_id": control_id,
-                        "control_name": control_response.get("name", "Unknown"),
-                        "automated": True,
-                        "rule_id": rule_id,
-                        "rule_info": {
+                    return vo.ControlAutomationResponseVO(
+                        success=True,
+                        control_id=control_id,
+                        control_name=control_response.get("name", "Unknown"),
+                        automated=True,
+                        rule_id=rule_id,
+                        rule_info={
                             "name": rule_details.get("name", "Unknown"),
                             "type": rule_details.get("type", "Unknown"),
                             "description": rule_details.get("meta", {}).get("description", "No description available"),
                         },
-                        "message": "This control is automated with the rule details provided above."
-                    }
+                        message="This control is automated with the rule details provided above.",
+                    )
                 else:
-                    return {
-                        "control_id": control_id,
-                        "control_name": control_response.get("name", "Unknown"),
-                        "automated": True,
-                        "rule_id": rule_id,
-                        "message": "Control is automated but unable to fetch rule details.",
-                        "error": rule_details.get("error", "Unknown error")
-                    }
+                    return vo.ControlAutomationResponseVO(
+                        success=False,
+                        control_id=control_id,
+                        control_name=control_response.get("name", "Unknown"),
+                        automated=True,
+                        rule_id=rule_id,
+                        message="Control is automated but unable to fetch rule details.",
+                        error=utils.build_structured_error(
+                            rule_details.get("error", "Unknown error"),
+                            "rules:verify_control_automation",
+                        ),
+                    )
                     
             except Exception as e:
-                return {
-                    "control_id": control_id,
-                    "control_name": control_response.get("name", "Unknown"),
-                    "automated": True,
-                    "rule_id": rule_id,
-                    "message": "Control is automated but error occurred while fetching rule details.",
-                    "error": str(e)
-                }
+                return vo.ControlAutomationResponseVO(
+                    success=False,
+                    control_id=control_id,
+                    control_name=control_response.get("name", "Unknown"),
+                    automated=True,
+                    rule_id=rule_id,
+                    message="Control is automated but error occurred while fetching rule details.",
+                    error=utils.build_structured_error(
+                        str(e),
+                        "rules:verify_control_automation",
+                    ),
+                )
                 
         except Exception as e:
-            return {
-                "error": f"Failed to verify control automation: {str(e)}",
-                "control_id": control_id,
-                "automated": False
-            }
+            return vo.ControlAutomationResponseVO(
+                success=False,
+                control_id=control_id,
+                automated=False,
+                error=utils.build_structured_error(
+                    f"Failed to verify control automation: {str(e)}",
+                    "rules:verify_control_automation",
+                ),
+            )
 
-    @mcp.tool()
-    def fetch_cc_rules_list(params: Dict[str, Any] = None, ctx: Optional[Context] = None) -> List[vo.SimplifiedRuleVO]:
+    @mcp.tool(annotations=utils.tool_annotations("Fetch Cc Rules List",read_only=True))
+    def fetch_cc_rules_list(
+        params: Dict[str, Any] = None, ctx: Optional[Context] = None
+    ) -> vo.SimplifiedRuleListVO:
         """
         Fetch list of CC rules with only name, description, and id.
         This tool should ONLY be used for attaching rules to control flows.
@@ -1950,11 +2098,11 @@ if constants.ENABLE_CCOW_API_TOOLS:
                     
                     for rule_data in rules:
                         # Extract only name, description, and id
-                        simplified_rule = {
-                            "id": rule_data.get("id"),
-                            "name": rule_data.get("name"),
-                            "description": rule_data.get("meta", {}).get("description", "No description available")
-                        }
+                        simplified_rule = vo.SimplifiedRuleVO(
+                            id=rule_data.get("id"),
+                            name=rule_data.get("name"),
+                            description=rule_data.get("meta", {}).get("description", "No description available"),
+                        )
                         combined_rules.append(simplified_rule)
                     
                     total_pages = int(response.get("totalPage", 0)) or 1
@@ -1964,13 +2112,18 @@ if constants.ENABLE_CCOW_API_TOOLS:
                     has_next = False
                     
             except Exception as e:
-                return [{
-                    "error": f"Failed to fetch CC rules list: {str(e)}"
-                }]
+                return vo.SimplifiedRuleListVO(
+                    success=False,
+                    rules=[],
+                    error=utils.build_structured_error(
+                        f"Failed to fetch CC rules list: {str(e)}",
+                        "rules:fetch_cc_rules_list",
+                    ),
+                )
         
-        return combined_rules
+        return vo.SimplifiedRuleListVO(success=True, rules=combined_rules)
 
-    @mcp.tool()
+    @mcp.tool(annotations=utils.tool_annotations("Create Control Note",read_only=False))
     async def create_control_note(
         controlId: str,
         assessmentId: str,
@@ -1978,7 +2131,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
         topic: str,
         confirm: bool = False,
         ctx: Context | None = None,
-    ) -> dict:
+    ) -> vo.ControlNoteMutationResponseVO:
         """
         Create a documentation note on a control.
         
@@ -2017,15 +2170,15 @@ if constants.ENABLE_CCOW_API_TOOLS:
             
             if not controlId or not str(controlId).strip():
                 logger.error("create_control_config_note error: controlId is mandatory\n")
-                return {"success": False, "error": "controlId is mandatory"}
+                return vo.ControlNoteMutationResponseVO(success=False, error=utils.build_structured_error("controlId is mandatory", "rules:create_control_note"))
             
             if not assessmentId or not str(assessmentId).strip():
                 logger.error("create_control_config_note error: assessmentId is mandatory\n")
-                return {"success": False, "error": "assessmentId is mandatory"}
+                return vo.ControlNoteMutationResponseVO(success=False, error=utils.build_structured_error("assessmentId is mandatory", "rules:create_control_note"))
             
             if not notes or not str(notes).strip():
                 logger.error("create_control_config_note error: notes content is mandatory\n")
-                return {"success": False, "error": "notes content is mandatory"}
+                return vo.ControlNoteMutationResponseVO(success=False, error=utils.build_structured_error("notes content is mandatory", "rules:create_control_note"))
             
             # Build payload
             payload = {
@@ -2037,14 +2190,14 @@ if constants.ENABLE_CCOW_API_TOOLS:
 
             if not confirm:
                 logger.info("create_control_config_note: Returning confirmation preview\n")
-                return {
-                    "success": True,
-                    "message": "Confirmation required before creating note",
-                    "controlId": payload["planControlID"],
-                    "topic": payload["topic"],
-                    "notes": payload["notes"],
-                    "next_step": "Review the Note above. If you need to modify it, provide the updated note parameter when calling with confirm=True. If correct, re-run with confirm=True to create note."
-            }
+                return vo.ControlNoteMutationResponseVO(
+                    success=True,
+                    message="Confirmation required before creating note",
+                    controlId=payload["planControlID"],
+                    topic=payload["topic"],
+                    notes=payload["notes"],
+                    next_step="Review the Note above. If you need to modify it, provide the updated note parameter when calling with confirm=True. If correct, re-run with confirm=True to create note.",
+                )
             
             # Construct URL with control ID
             url = constants.URL_PLAN_CONTROL_NOTES.format(controlConfigId=str(controlId).strip())
@@ -2062,7 +2215,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
             )
 
             if resp_raw.status_code == 502:
-                return {"success": False, "error": error_constants.ERROR_BAD_GATEWAY}
+                return vo.ControlNoteMutationResponseVO(success=False, error=utils.build_structured_error(error_constants.ERROR_BAD_GATEWAY, "rules:create_control_note"))
             
             
             if resp_raw.status_code == 201:
@@ -2079,11 +2232,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
                     noteId = resp.get("id")
                 
                 logger.info(f"create_control_note: Successfully created note with status 201\n")
-                return {
-                    "success": True,
-                    "noteId": noteId,
-                    "message": "Note created successfully",
-                }
+                return vo.ControlNoteMutationResponseVO(success=True, noteId=noteId, message="Note created successfully")
             else:
                 # Error - parse error response
                 error_resp = {}
@@ -2096,24 +2245,22 @@ if constants.ENABLE_CCOW_API_TOOLS:
                 logger.error("create_control_note error: Status {} - {}\n".format(resp_raw.status_code, error_resp))
                 
                 # Check for error fields in response
-                if isinstance(error_resp, dict):
-                    if "Message" in error_resp:
-                        return {"success": False, "error": error_resp}
-                    if "error" in error_resp:
-                        return {"success": False, "error": error_resp.get("error")}
+                output_error = utils.build_structured_error(error_resp, "rules:create_control_note")
+                if output_error:
+                    return vo.ControlNoteMutationResponseVO(success=False, error=output_error)
 
-                return {"success": False, "error": f"Failed to create note: HTTP {resp_raw.status_code}"}
+                return vo.ControlNoteMutationResponseVO(success=False, error=utils.build_structured_error(f"Failed to create note: HTTP {resp_raw.status_code}", "rules:create_control_note"))
             
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.error("create_control_note error: {}\n".format(e))
-            return {"success": False, "error": f"Unexpected error creating control note: {e}"}
+            return vo.ControlNoteMutationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error creating control note: {e}", "rules:create_control_note"))
 
-    @mcp.tool()
+    @mcp.tool(annotations=utils.tool_annotations("List Control Notes",read_only=True))
     async def list_control_notes(
         controlId: str,
         ctx: Context | None = None
-    ) -> dict:
+    ) -> vo.ControlNoteListResponseVO:
         """
         List all notes for a given control.
         
@@ -2137,52 +2284,54 @@ if constants.ENABLE_CCOW_API_TOOLS:
             
             if not controlId or not str(controlId).strip():
                 logger.error("list_control_config_notes error: controlId is mandatory\n")
-                return {"success": False, "error": "controlId is mandatory"}
+                return vo.ControlNoteListResponseVO(success=False, error=utils.build_structured_error("controlId is mandatory", "rules:list_control_notes"))
 
             control_id = str(controlId).strip()
             url = constants.URL_PLAN_CONTROL_NOTES.format(controlConfigId=control_id)
             
             logger.debug("list_control_notes URL: {}\n".format(url))
             
-            output = await utils.make_GET_API_call_to_CCow(url, ctx=ctx)
+            output = await utils.make_API_call_to_CCow_and_get_response(
+                url,
+                "GET",
+                ctx=ctx,
+            )
             
             logger.info(f"create_control_note: \n Response : {output}\n")
 
-            if isinstance(output, str) or (isinstance(output, dict) and "error" in output):
+            output_error = utils.build_structured_error(output, "rules:list_control_notes")
+            if output_error:
                 logger.error("list_control_notes error: {}\n".format(output))
-                return {"success": False, "error": "Failed to fetch control notes"}
+                return vo.ControlNoteListResponseVO(success=False, error=output_error)
             
             if isinstance(output, dict):
-                if "Message" in output:
-                    logger.error("list_control_notes error: {}\n".format(output))
-                    return {"success": False, "error": output}
                 
                 items = output.get("items", [])
                 if not isinstance(items, list):
                     items = []
 
-                abstracted_items = []
+                abstracted_items: list[vo.ControlNoteItemVO] = []
                 for item in items:
                     if isinstance(item, dict):
-                        abstracted_item = {
-                            "id": item.get("id", ""),
-                            "topic": item.get("topic", ""),
-                            "notes": item.get("notes", ""),
-                        }
+                        abstracted_item = vo.ControlNoteItemVO(
+                            id=item.get("id", ""),
+                            topic=item.get("topic", ""),
+                            notes=item.get("notes", ""),
+                        )
                         abstracted_items.append(abstracted_item)
                 
                 logger.info(f"list_control_notes: {abstracted_items} \n Found {len(abstracted_items)} note(s)\n")
-                return {"success": True, "notes": abstracted_items, "totalCount": len(abstracted_items)}
+                return vo.ControlNoteListResponseVO(success=True, notes=abstracted_items, totalCount=len(abstracted_items))
             
             logger.error("list_control_notes error: Unexpected response type: {}\n".format(type(output)))
-            return {"success": False, "error": f"Unexpected response type: {output}"}
+            return vo.ControlNoteListResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {output}", "rules:list_control_notes"))
             
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.error("list_control_config_notes error: {}\n".format(e))
-            return {"success": False, "error": f"Unexpected error listing control notes: {e}"}
+            return vo.ControlNoteListResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error listing control notes: {e}", "rules:list_control_notes"))
 
-    @mcp.tool()
+    @mcp.tool(annotations=utils.tool_annotations("Update Control Config Note",read_only=False))
     async def update_control_config_note(
         controlId: str,
         noteId: str,
@@ -2191,7 +2340,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
         topic: str,
         confirm: bool = False,
         ctx: Context | None = None,
-    ) -> dict:
+    ) -> vo.ControlNoteMutationResponseVO:
         """
         Update an existing documentation note on a control.
         
@@ -2228,19 +2377,19 @@ if constants.ENABLE_CCOW_API_TOOLS:
             
             if not controlId or not str(controlId).strip():
                 logger.error("update_control_config_note error: controlId is mandatory\n")
-                return {"success": False, "error": "controlId is mandatory"}
+                return vo.ControlNoteMutationResponseVO(success=False, error=utils.build_structured_error("controlId is mandatory", "rules:update_control_config_note"))
             
             if not noteId or not str(noteId).strip():
                 logger.error("update_control_config_note error: noteId is mandatory\n")
-                return {"success": False, "error": "noteId is mandatory"}
+                return vo.ControlNoteMutationResponseVO(success=False, error=utils.build_structured_error("noteId is mandatory", "rules:update_control_config_note"))
             
             if not assessmentId or not str(assessmentId).strip():
                 logger.error("update_control_config_note error: assessmentId is mandatory\n")
-                return {"success": False, "error": "assessmentId is mandatory"}
+                return vo.ControlNoteMutationResponseVO(success=False, error=utils.build_structured_error("assessmentId is mandatory", "rules:update_control_config_note"))
             
             if not notes or not str(notes).strip():
                 logger.error("update_control_config_note error: notes content is mandatory\n")
-                return {"success": False, "error": "notes content is mandatory"}
+                return vo.ControlNoteMutationResponseVO(success=False, error=utils.build_structured_error("notes content is mandatory", "rules:update_control_config_note"))
             
             # Build payload
             payload = {
@@ -2252,15 +2401,15 @@ if constants.ENABLE_CCOW_API_TOOLS:
 
             if not confirm:
                 logger.info("update_control_config_note: Returning confirmation preview\n")
-                return {
-                    "success": True,
-                    "message": "Confirmation required before updating note",
-                    "controlId": payload["planControlID"],
-                    "noteId": str(noteId).strip(),
-                    "topic": payload["topic"],
-                    "notes": payload["notes"],
-                    "next_step": "Review the updated Note above. If you need to modify it, provide the updated notes or topic parameters when calling with confirm=True. If correct, re-run with confirm=True to update the note."
-                }
+                return vo.ControlNoteMutationResponseVO(
+                    success=True,
+                    message="Confirmation required before updating note",
+                    controlId=payload["planControlID"],
+                    noteId=str(noteId).strip(),
+                    topic=payload["topic"],
+                    notes=payload["notes"],
+                    next_step="Review the updated Note above. If you need to modify it, provide the updated notes or topic parameters when calling with confirm=True. If correct, re-run with confirm=True to update the note.",
+                )
             
             # Construct URL with control ID and note ID
             url = f"{constants.URL_PLAN_CONTROL_NOTES.format(controlConfigId=str(controlId).strip())}/{str(noteId).strip()}"
@@ -2278,15 +2427,11 @@ if constants.ENABLE_CCOW_API_TOOLS:
             )
 
             if resp_raw.status_code == 502:
-                return {"success": False, "error": error_constants.ERROR_BAD_GATEWAY}
+                return vo.ControlNoteMutationResponseVO(success=False, error=utils.build_structured_error(error_constants.ERROR_BAD_GATEWAY, "rules:update_control_config_note"))
             
             if resp_raw.status_code == 204:
                 logger.info(f"update_control_config_note: Successfully updated note with status 204\n")
-                return {
-                    "success": True,
-                    "noteId": str(noteId).strip(),
-                    "message": "Note updated successfully",
-                }
+                return vo.ControlNoteMutationResponseVO(success=True, noteId=str(noteId).strip(), message="Note updated successfully")
             else:
                 # Error - parse error response
                 error_resp = {}
@@ -2299,21 +2444,19 @@ if constants.ENABLE_CCOW_API_TOOLS:
                 logger.error("update_control_config_note error: Status {} - {}\n".format(resp_raw.status_code, error_resp))
                 
                 # Check for error fields in response
-                if isinstance(error_resp, dict):
-                    if "Message" in error_resp:
-                        return {"success": False, "error": error_resp}
-                    if "error" in error_resp:
-                        return {"success": False, "error": error_resp.get("error")}
+                output_error = utils.build_structured_error(error_resp, "rules:update_control_config_note")
+                if output_error:
+                    return vo.ControlNoteMutationResponseVO(success=False, error=output_error)
 
-                return {"success": False, "error": f"Failed to update note: HTTP {resp_raw.status_code}"}
+                return vo.ControlNoteMutationResponseVO(success=False, error=utils.build_structured_error(f"Failed to update note: HTTP {resp_raw.status_code}", "rules:update_control_config_note"))
             
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.error("update_control_config_note error: {}\n".format(e))
-            return {"success": False, "error": f"Unexpected error updating control note: {e}"}
+            return vo.ControlNoteMutationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error updating control note: {e}", "rules:update_control_config_note"))
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Get Tasks Summary",read_only=True))
 def get_tasks_summary(ctx: Context | None = None) -> str:
     """
     Resource containing minimal task information for initial selection.
@@ -2392,8 +2535,10 @@ def get_tasks_summary(ctx: Context | None = None) -> str:
         return json.dumps({"error": f"An error occurred while fetching the task summary: {e}", "tasks": []})
 
 
-@mcp.tool()
-def get_template_guidance(task_name: str, input_name: str, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Get Template Guidance",read_only=True))
+def get_template_guidance(
+    task_name: str, input_name: str, ctx: Context | None = None
+) -> vo.TemplateGuidanceResponseVO:
     """Get detailed guidance for filling out a template-based input.
 
     COMPLETE TEMPLATE HANDLING PROCESS:
@@ -2492,7 +2637,13 @@ def get_template_guidance(task_name: str, input_name: str, ctx: Context | None =
             task = TaskVO.from_dict(tasks_resp["items"][0])
 
         if not task:
-            return {"success": False, "error": f"Task '{task_name}' not found in available tasks"}
+            return vo.TemplateGuidanceResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Task '{task_name}' not found in available tasks",
+                    "rules:get_template_guidance",
+                ),
+            )
 
         # Find the specific input
         task_input = None
@@ -2504,24 +2655,55 @@ def get_template_guidance(task_name: str, input_name: str, ctx: Context | None =
                 break
 
         if not task_input:
-            return {"success": False, "error": f"Input '{input_name}' not found in task '{task_name}'. Available inputs are: {available_task_inputs}"}
+            return vo.TemplateGuidanceResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Input '{input_name}' not found in task '{task_name}'. Available inputs are: {available_task_inputs}",
+                    "rules:get_template_guidance",
+                ),
+            )
 
         if not task_input.templateFile:
-            return {"success": False, "error": f"Input {input_name} does not have a template file"}
+            return vo.TemplateGuidanceResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Input {input_name} does not have a template file",
+                    "rules:get_template_guidance",
+                ),
+            )
 
         # Decode template and provide guidance
         decoded_template = rule.decode_content(task_input.templateFile)
         guidance = rule.generate_detailed_template_guidance(
             decoded_template, task_input)
 
-        return {"success": True, "task_name": task_name, "input_name": input_name, "input_description": task_input.description, "format": task_input.format, "decoded_template": decoded_template, "guidance": guidance, "example_content": rule.generate_example_content(decoded_template, task_input.format), "validation_rules": rule.get_template_validation_rules(task_input.format), "presentation_format": f"Now configuring: [X of Y inputs]\n\nTask: {task_name}\nInput: {input_name} - {task_input.description}\n\nHere's the template structure:\n\n{decoded_template}\n\nThis {task_input.format} file requires specific fields. Please provide your actual configuration following this template."}
+        return vo.TemplateGuidanceResponseVO(
+            success=True,
+            task_name=task_name,
+            input_name=input_name,
+            input_description=task_input.description,
+            format=task_input.format,
+            decoded_template=decoded_template,
+            guidance=guidance,
+            example_content=rule.generate_example_content(decoded_template, task_input.format),
+            validation_rules=rule.get_template_validation_rules(task_input.format),
+            presentation_format=f"Now configuring: [X of Y inputs]\n\nTask: {task_name}\nInput: {input_name} - {task_input.description}\n\nHere's the template structure:\n\n{decoded_template}\n\nThis {task_input.format} file requires specific fields. Please provide your actual configuration following this template.",
+        )
 
     except Exception as e:
-        return {"success": False, "error": f"Failed to get template guidance: {e}"}
+        return vo.TemplateGuidanceResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                f"Failed to get template guidance: {e}",
+                "rules:get_template_guidance",
+            ),
+        )
 
 
-@mcp.tool()
-def collect_template_input(task_name: str, input_name: str, user_content: Any, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Collect Template Input",read_only=True))
+def collect_template_input(
+    task_name: str, input_name: str, user_content: Any, ctx: Context | None = None
+) -> vo.CollectTemplateInputResponseVO:
     """Collect user input for template-based task inputs.
 
     TEMPLATE INPUT PROCESSING (Enhanced with Progressive Saving):
@@ -2590,7 +2772,13 @@ def collect_template_input(task_name: str, input_name: str, user_content: Any, c
         if rule.is_valid_key(tasks_resp, "items", array_check=True):
             task = TaskVO.from_dict(tasks_resp["items"][0])
         if not task:
-            return {"success": False, "error": f"Task '{task_name}' not found in available tasks"}
+            return vo.CollectTemplateInputResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Task '{task_name}' not found in available tasks",
+                    "rules:collect_template_input",
+                ),
+            )
 
         # Find the specific input
         task_input = None
@@ -2602,7 +2790,13 @@ def collect_template_input(task_name: str, input_name: str, user_content: Any, c
                 break
 
         if not task_input:
-            return {"success": False, "error": f"Input '{input_name}' not found in task '{task_name}'. Available inputs are: {available_task_inputs}"}
+            return vo.CollectTemplateInputResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Input '{input_name}' not found in task '{task_name}'. Available inputs are: {available_task_inputs}",
+                    "rules:collect_template_input",
+                ),
+            )
         
         # Check type and convert to string
         if isinstance(user_content, (dict, list)):
@@ -2613,35 +2807,54 @@ def collect_template_input(task_name: str, input_name: str, user_content: Any, c
         # Validate the content including JSON arrays (preserved validation)
         validation_result = rule.validate_template_content_enhanced(task_input, user_content)
         if not validation_result["valid"]:
-            return {"success": False, "error": "Content validation failed", "validation_errors": validation_result["errors"], "suggestions": validation_result["suggestions"]}
+            return vo.CollectTemplateInputResponseVO(
+                success=False,
+                validation_errors=validation_result["errors"],
+                suggestions=validation_result["suggestions"],
+                error=utils.build_structured_error(
+                    "Content validation failed",
+                    "rules:collect_template_input",
+                ),
+            )
 
         # Generate content preview for confirmation (preserved)
         content_preview = rule.generate_content_preview(user_content, task_input.format)
 
         # Need final confirmation before storing/uploading
-        result =  {
-            "success": True,
-            "task_name": task_name,
-            "input_name": input_name,
-            "validated_content": user_content,
-            "content_preview": content_preview,
-            "needs_final_confirmation": True,
-            "data_type": task_input.dataType,
-            "format": task_input.format,
-            "is_file_type": task_input.dataType.upper() in ["FILE", "HTTP_CONFIG"],
-            "final_confirmation_message": f"You provided this {task_input.format.upper()} content:\n\n{content_preview}\n\nIs this correct? (yes/no)",
-            "message": "Template content validated - needs final confirmation before processing and rule update",
-            "ready_for_rule_update": True  # NEW: Indicates this input is ready for rule progression
-        }
-
-        return result
+        return vo.CollectTemplateInputResponseVO(
+            success=True,
+            task_name=task_name,
+            input_name=input_name,
+            validated_content=user_content,
+            content_preview=content_preview,
+            needs_final_confirmation=True,
+            data_type=task_input.dataType,
+            format=task_input.format,
+            is_file_type=task_input.dataType.upper() in ["FILE", "HTTP_CONFIG"],
+            final_confirmation_message=f"You provided this {task_input.format.upper()} content:\n\n{content_preview}\n\nIs this correct? (yes/no)",
+            message="Template content validated - needs final confirmation before processing and rule update",
+            ready_for_rule_update=True,
+        )
 
     except Exception as e:
-        return {"success": False, "error": f"Failed to process template input: {e}"}
+        return vo.CollectTemplateInputResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                f"Failed to process template input: {e}",
+                "rules:collect_template_input",
+            ),
+        )
 
 
-@mcp.tool()
-def confirm_template_input(rule_name: str, task_name: str, rule_input_name: str, input_name: str, confirmed_content: str, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Confirm Template Input",read_only=False))
+def confirm_template_input(
+    rule_name: str,
+    task_name: str,
+    rule_input_name: str,
+    input_name: str,
+    confirmed_content: str,
+    ctx: Context | None = None,
+) -> vo.ConfirmTemplateInputResponseVO:
     """Confirm and process template input after user validation.
 
     CONFIRMATION PROCESSING (Enhanced with Automatic Rule Updates):
@@ -2688,7 +2901,13 @@ def confirm_template_input(rule_name: str, task_name: str, rule_input_name: str,
         if rule.is_valid_key(tasks_resp, "items", array_check=True):
             task = TaskVO.from_dict(tasks_resp["items"][0])
         if not task:
-            return {"success": False, "error": f"Task '{task_name}' not found in available tasks"}
+            return vo.ConfirmTemplateInputResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Task '{task_name}' not found in available tasks",
+                    "rules:confirm_template_input",
+                ),
+            )
 
         # Find the specific input
         task_input = None
@@ -2700,7 +2919,13 @@ def confirm_template_input(rule_name: str, task_name: str, rule_input_name: str,
                 break
 
         if not task_input:
-            return {"success": False, "error": f"Input '{input_name}' not found in task '{task_name}'. Available inputs are: {available_task_inputs}"}
+            return vo.ConfirmTemplateInputResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Input '{input_name}' not found in task '{task_name}'. Available inputs are: {available_task_inputs}",
+                    "rules:confirm_template_input",
+                ),
+            )
 
         # Check if this is a FILE or HTTP_CONFIG type input that needs upload (preserved logic)
         if task_input.dataType.upper() in ["FILE", "HTTP_CONFIG"]:
@@ -2711,11 +2936,18 @@ def confirm_template_input(rule_name: str, task_name: str, rule_input_name: str,
             # Upload the file and get URL
             upload_result = upload_file.fn(rule_name=rule_name, file_name=file_name, content=confirmed_content, ctx=ctx)
 
-            if upload_result["success"]:
-                input_value = upload_result["file_url"]
+            upload_payload = upload_result.model_dump() if isinstance(upload_result, BaseModel) else upload_result
+            if upload_payload["success"]:
+                input_value = upload_payload["file_url"]
                 storage_type = "FILE"
             else:
-                return {"success": False, "error": f"File upload failed: {upload_result.get('error', 'Unknown error')}"}
+                return vo.ConfirmTemplateInputResponseVO(
+                    success=False,
+                    error=utils.build_structured_error(
+                        f"File upload failed: {upload_payload.get('error', 'Unknown error')}",
+                        "rules:confirm_template_input",
+                    ),
+                )
         else:
             # For non-FILE inputs, store content in memory (don't upload)
             input_value = confirmed_content
@@ -2729,9 +2961,10 @@ def confirm_template_input(rule_name: str, task_name: str, rule_input_name: str,
         try:
             # Fetch current rule
             current_rule = fetch_rule.fn(rule_name, ctx)
+            current_rule_payload = current_rule.model_dump() if isinstance(current_rule, BaseModel) else current_rule
             logger.info(f"current_rule ::{current_rule}")
-            if current_rule["success"]:
-                rule_structure = current_rule["rule_structure"]
+            if current_rule_payload["success"]:
+                rule_structure = current_rule_payload["rule_structure"]
 
                 logger.info(f"rule_structure 111 ::{rule_structure}")
 
@@ -2765,41 +2998,54 @@ def confirm_template_input(rule_name: str, task_name: str, rule_input_name: str,
                 logger.info(f"rule_structure 3333 ::{rule_structure}")
                 
                 # Update rule - status will be auto-detected
-                update_result = create_rule.fn(rule_structure, ctx)
+                update_result = create_rule.fn(rule_structure, True, ctx)
+                update_payload = update_result.model_dump() if isinstance(update_result, BaseModel) else update_result
                 logger.info(f"update_result ::{update_result}")
-                rule_update_success = update_result["success"]
-                rule_status = update_result.get("detected_status", "UNKNOWN")
-                rule_progress = update_result.get("progress_percentage", 0)
+                rule_update_success = update_payload["success"]
+                rule_status = update_payload.get("detected_status", "UNKNOWN")
+                rule_progress = update_payload.get("progress_percentage", 0)
                 
         except Exception as update_error:
             # Log the error but don't fail the input processing
             print(f"Warning: Rule update failed for {rule_name}: {update_error}")
 
-        return {
-            "success": True,
-            "task_name": task_name,
-            "input_name": input_name,
-            "file_url": input_value if storage_type == "FILE" else None,
-            "stored_content": input_value if storage_type == "MEMORY" else None,
-            "filename": file_name if storage_type == "FILE" else None,
-            "content_size": len(confirmed_content),
-            "storage_type": storage_type,
-            "data_type": task_input.dataType,
-            "format": task_input.format,
-            "timestamp": datetime.now().isoformat(),
-            "rule_name": rule_name,
-            "rule_updated": rule_update_success,
-            "rule_status": rule_status,
-            "rule_progress": rule_progress,
-            "message": f"Template file {'uploaded' if storage_type == 'FILE' else 'stored'} successfully for {input_name} in {task_name}. Rule '{rule_name}' {'updated automatically' if rule_update_success else 'update failed'}."
-        }
+        return vo.ConfirmTemplateInputResponseVO(
+            success=True,
+            task_name=task_name,
+            input_name=input_name,
+            file_url=input_value if storage_type == "FILE" else None,
+            stored_content=input_value if storage_type == "MEMORY" else None,
+            filename=file_name if storage_type == "FILE" else None,
+            content_size=len(confirmed_content),
+            storage_type=storage_type,
+            data_type=task_input.dataType,
+            format=task_input.format,
+            timestamp=datetime.now().isoformat(),
+            rule_name=rule_name,
+            rule_updated=rule_update_success,
+            rule_status=rule_status,
+            rule_progress=rule_progress,
+            message=f"Template file {'uploaded' if storage_type == 'FILE' else 'stored'} successfully for {input_name} in {task_name}. Rule '{rule_name}' {'updated automatically' if rule_update_success else 'update failed'}.",
+        )
 
     except Exception as e:
-        return {"success": False, "error": f"Failed to confirm template input: {e}"}
+        return vo.ConfirmTemplateInputResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                f"Failed to confirm template input: {e}",
+                "rules:confirm_template_input",
+            ),
+        )
 
 
-@mcp.tool()
-def upload_file(rule_name: str, file_name: str, content: Any, content_encoding: str = "utf-8", ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Upload File",read_only=False))
+def upload_file(
+    rule_name: str,
+    file_name: str,
+    content: Any,
+    content_encoding: str = "utf-8",
+    ctx: Context | None = None,
+) -> vo.UploadFileResponseVO:
     """
     Upload file content and return file URL for use in rules.
 
@@ -2859,12 +3105,15 @@ def upload_file(rule_name: str, file_name: str, content: Any, content_encoding: 
     try:
         # Validate content encoding
         if content_encoding not in ["utf-8", "base64"]:
-            return {
-                "success": False,
-                "error": f"Unsupported encoding: {content_encoding}",
-                "filename": file_name,
-                "supported_encodings": ["utf-8", "base64"]
-            }
+            return vo.UploadFileResponseVO(
+                success=False,
+                filename=file_name,
+                supported_encodings=["utf-8", "base64"],
+                error=utils.build_structured_error(
+                    f"Unsupported encoding: {content_encoding}",
+                    "rules:upload_file",
+                ),
+            )
 
         # Check type and convert to string
         if isinstance(content, (dict, list)):
@@ -2877,11 +3126,14 @@ def upload_file(rule_name: str, file_name: str, content: Any, content_encoding: 
             try:
                 decoded_content = base64.b64decode(content).decode("utf-8")
             except Exception as e:
-                return {
-                    "success": False,
-                    "error": f"Failed to decode base64 content: {e}",
-                    "filename": file_name
-                }
+                return vo.UploadFileResponseVO(
+                    success=False,
+                    filename=file_name,
+                    error=utils.build_structured_error(
+                        f"Failed to decode base64 content: {e}",
+                        "rules:upload_file",
+                    ),
+                )
         else:
             decoded_content = content
 
@@ -2894,13 +3146,16 @@ def upload_file(rule_name: str, file_name: str, content: Any, content_encoding: 
 
         # If validation failed, return error with details
         if not is_valid:
-            return {
-                "success": False,
-                "error": f"File validation failed: {validation_message}",
-                "filename": file_name,
-                "file_format": file_format,
-                "suggestion": "Please check your file content and format, then try again"
-            }
+            return vo.UploadFileResponseVO(
+                success=False,
+                filename=file_name,
+                file_format=file_format,
+                suggestion="Please check your file content and format, then try again",
+                error=utils.build_structured_error(
+                    f"File validation failed: {validation_message}",
+                    "rules:upload_file",
+                ),
+            )
 
         # Convert formatted content to base64 for upload
         encoded_content = base64.b64encode(
@@ -2925,37 +3180,45 @@ def upload_file(rule_name: str, file_name: str, content: Any, content_encoding: 
         )
 
         if rule.is_valid_key(file_upload_resp, "fileURL"):
-            return {
-                "success": True,
-                "file_url": file_upload_resp["fileURL"],
-                "filename": file_name,
-                "unique_filename": unique_file_name,
-                "file_id": file_id,
-                "file_format": file_format,
-                "content_size": len(formatted_content),
-                "validation_status": validation_message,
-                "was_formatted": formatted_content != decoded_content,
-                "message": f"File '{file_name}' uploaded successfully with {file_format.upper()} validation"
-            }
+            return vo.UploadFileResponseVO(
+                success=True,
+                file_url=file_upload_resp["fileURL"],
+                filename=file_name,
+                unique_filename=unique_file_name,
+                file_id=file_id,
+                file_format=file_format,
+                content_size=len(formatted_content),
+                validation_status=validation_message,
+                was_formatted=formatted_content != decoded_content,
+                message=f"File '{file_name}' uploaded successfully with {file_format.upper()} validation",
+            )
 
-        return {
-            "success": False,
-            "error": "Upload API did not return file URL",
-            "filename": file_name,
-            "file_format": file_format
-        }
+        return vo.UploadFileResponseVO(
+            success=False,
+            filename=file_name,
+            file_format=file_format,
+            error=utils.build_structured_error(
+                "Upload API did not return file URL",
+                "rules:upload_file",
+            ),
+        )
 
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"Upload failed: {e}",
-            "filename": file_name,
-            "exception_type": type(e).__name__
-        }
+        return vo.UploadFileResponseVO(
+            success=False,
+            filename=file_name,
+            exception_type=type(e).__name__,
+            error=utils.build_structured_error(
+                f"Upload failed: {e}",
+                "rules:upload_file",
+            ),
+        )
 
 
-@mcp.tool()
-def collect_parameter_input(task_name: str, input_name: str, user_value: str = None, use_default: bool = False, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Collect Parameter Input",read_only=True))
+def collect_parameter_input(
+    task_name: str, input_name: str, user_value: str = None, use_default: bool = False, ctx: Context | None = None
+) -> vo.CollectParameterInputResponseVO:
     """Collect user input for non-template parameter inputs.
 
     PARAMETER INPUT PROCESSING:
@@ -3030,7 +3293,13 @@ def collect_parameter_input(task_name: str, input_name: str, user_value: str = N
         if rule.is_valid_key(tasks_resp, "items", array_check=True):
             task = TaskVO.from_dict(tasks_resp["items"][0])
         if not task:
-            return {"success": False, "error": f"Task '{task_name}' not found in available tasks"}
+            return vo.CollectParameterInputResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Task '{task_name}' not found in available tasks",
+                    "rules:collect_parameter_input",
+                ),
+            )
 
         # Find the specific input
         task_input = None
@@ -3042,7 +3311,13 @@ def collect_parameter_input(task_name: str, input_name: str, user_value: str = N
                 break
 
         if not task_input:
-            return {"success": False, "error": f"Input '{input_name}' not found in task '{task_name}'. Available inputs are: {available_task_inputs}"}
+            return vo.CollectParameterInputResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Input '{input_name}' not found in task '{task_name}'. Available inputs are: {available_task_inputs}",
+                    "rules:collect_parameter_input",
+                ),
+            )
 
         # Check if this input is required
         is_required = task_input.required
@@ -3051,30 +3326,85 @@ def collect_parameter_input(task_name: str, input_name: str, user_value: str = N
         # Handle different input scenarios
         if use_default and has_default:
             # User wants to use default - need confirmation
-            return {"success": True, "task_name": task_name, "input_name": input_name, "needs_default_confirmation": True, "default_value": task_input.defaultValue, "data_type": task_input.dataType, "required": is_required, "confirmation_message": f"I can fill this with the default value: '{task_input.defaultValue}'. Confirm? (yes/no)", "message": "Default value needs user confirmation before proceeding"}
+            return vo.CollectParameterInputResponseVO(
+                success=True,
+                task_name=task_name,
+                input_name=input_name,
+                needs_default_confirmation=True,
+                default_value=task_input.defaultValue,
+                data_type=task_input.dataType,
+                required=is_required,
+                confirmation_message=f"I can fill this with the default value: '{task_input.defaultValue}'. Confirm? (yes/no)",
+                message="Default value needs user confirmation before proceeding",
+            )
 
         elif user_value is not None:
             # User provided a value - validate it
             validation_result = rule.validate_parameter_value(
                 user_value, task_input.dataType)
             if not validation_result["valid"]:
-                return {"success": False, "error": "Invalid value format", "validation_errors": validation_result["errors"], "expected_type": task_input.dataType, "message": "Please provide a valid value"}
+                return vo.CollectParameterInputResponseVO(
+                    success=False,
+                    validation_errors=validation_result["errors"],
+                    expected_type=task_input.dataType,
+                    message="Please provide a valid value",
+                    error=utils.build_structured_error(
+                        "Invalid value format",
+                        "rules:collect_parameter_input",
+                    ),
+                )
 
             # Value is valid - need FINAL confirmation before storing
-            return {"success": True, "task_name": task_name, "input_name": input_name, "validated_value": validation_result["converted_value"], "needs_final_confirmation": True, "data_type": task_input.dataType, "required": is_required, "final_confirmation_message": f"You entered: '{validation_result['converted_value']}'. Is this correct? (yes/no)", "message": "Value validated - needs final confirmation before storing"}
+            return vo.CollectParameterInputResponseVO(
+                success=True,
+                task_name=task_name,
+                input_name=input_name,
+                validated_value=validation_result["converted_value"],
+                needs_final_confirmation=True,
+                data_type=task_input.dataType,
+                required=is_required,
+                final_confirmation_message=f"You entered: '{validation_result['converted_value']}'. Is this correct? (yes/no)",
+                message="Value validated - needs final confirmation before storing",
+            )
 
         else:
             # Need to collect input from user
             presentation = rule.generate_parameter_presentation(
                 task_input, task_name)
-            return {"success": True, "task_name": task_name, "input_name": input_name, "needs_user_input": True, "presentation": presentation, "data_type": task_input.dataType, "required": is_required, "has_default": has_default, "default_value": task_input.defaultValue if has_default else None, "message": "Ready to collect parameter input from user"}
+            return vo.CollectParameterInputResponseVO(
+                success=True,
+                task_name=task_name,
+                input_name=input_name,
+                needs_user_input=True,
+                presentation=presentation,
+                data_type=task_input.dataType,
+                required=is_required,
+                has_default=has_default,
+                default_value=task_input.defaultValue if has_default else None,
+                message="Ready to collect parameter input from user",
+            )
 
     except Exception as e:
-        return {"success": False, "error": f"Failed to process parameter input: {e}"}
+        return vo.CollectParameterInputResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                f"Failed to process parameter input: {e}",
+                "rules:collect_parameter_input",
+            ),
+        )
 
 
-@mcp.tool()
-def confirm_parameter_input(task_name: str, input_name: str, rule_input_name:str, confirmed_value: str, explaination: str, confirmation_type: str = "final", rule_name: str = None, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Confirm Parameter Input",read_only=False))
+def confirm_parameter_input(
+    task_name: str,
+    input_name: str,
+    rule_input_name: str,
+    confirmed_value: str,
+    explaination: str,
+    confirmation_type: str = "final",
+    rule_name: str = None,
+    ctx: Context | None = None,
+) -> vo.ConfirmParameterInputResponseVO:
     """Confirm and store parameter input after user validation.
 
     CONFIRMATION PROCESSING (Enhanced with Automatic Rule Updates):
@@ -3121,7 +3451,13 @@ def confirm_parameter_input(task_name: str, input_name: str, rule_input_name:str
         if rule.is_valid_key(tasks_resp, "items", array_check=True):
             task = TaskVO.from_dict(tasks_resp["items"][0])
         if not task:
-            return {"success": False, "error": f"Task '{task_name}' not found in available tasks"}
+            return vo.ConfirmParameterInputResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Task '{task_name}' not found in available tasks",
+                    "rules:confirm_parameter_input",
+                ),
+            )
 
         # Find the specific input
         task_input = None
@@ -3133,12 +3469,25 @@ def confirm_parameter_input(task_name: str, input_name: str, rule_input_name:str
                 break
 
         if not task_input:
-            return {"success": False, "error": f"Input '{input_name}' not found in task '{task_name}'. Available inputs are: {available_task_inputs}"}
+            return vo.ConfirmParameterInputResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Input '{input_name}' not found in task '{task_name}'. Available inputs are: {available_task_inputs}",
+                    "rules:confirm_parameter_input",
+                ),
+            )
 
         # Validate the confirmed value (preserved validation)
         validation_result = rule.validate_parameter_value(confirmed_value, task_input.dataType)
         if not validation_result["valid"]:
-            return {"success": False, "error": "Confirmed value is invalid", "validation_errors": validation_result["errors"]}
+            return vo.ConfirmParameterInputResponseVO(
+                success=False,
+                validation_errors=validation_result["errors"],
+                error=utils.build_structured_error(
+                    "Confirmed value is invalid",
+                    "rules:confirm_parameter_input",
+                ),
+            )
 
         # NEW: AUTOMATIC RULE UPDATE WITH NEW PARAMETER (if rule_name provided)
         rule_update_success = False
@@ -3149,8 +3498,9 @@ def confirm_parameter_input(task_name: str, input_name: str, rule_input_name:str
             try:
                 # Fetch current rule
                 current_rule = fetch_rule.fn(rule_name, ctx)
-                if current_rule["success"]:
-                    rule_structure = current_rule["rule_structure"]
+                current_rule_payload = current_rule.model_dump() if isinstance(current_rule, BaseModel) else current_rule
+                if current_rule_payload["success"]:
+                    rule_structure = current_rule_payload["rule_structure"]
                     
                     # Add parameter to rule structure
                     rule_structure["spec"]["inputs"][rule_input_name] = validation_result["converted_value"]
@@ -3178,40 +3528,49 @@ def confirm_parameter_input(task_name: str, input_name: str, rule_input_name:str
                     rule_structure["spec"]["inputsMeta__"].append(input_meta)
                     
                     # Update rule - status auto-detected
-                    update_result = create_rule.fn(rule_structure, ctx)
-                    rule_update_success = update_result["success"]
-                    rule_status = update_result.get("detected_status", "UNKNOWN")
-                    rule_progress = update_result.get("progress_percentage", 0)
+                    update_result = create_rule.fn(rule_structure, True, ctx)
+                    update_payload = update_result.model_dump() if isinstance(update_result, BaseModel) else update_result
+                    rule_update_success = update_payload["success"]
+                    rule_status = update_payload.get("detected_status", "UNKNOWN")
+                    rule_progress = update_payload.get("progress_percentage", 0)
                     
             except Exception as update_error:
                 # Log the error but don't fail the parameter processing
                 print(f"Warning: Rule update failed for {rule_name}: {update_error}")
 
         # Store the confirmed value in memory (preserved logic)
-        return {
-            "success": True,
-            "task_name": task_name,
-            "input_name": input_name,
-            "stored_value": validation_result["converted_value"],
-            "data_type": task_input.dataType,
-            "required": task_input.required,
-            "storage_type": "MEMORY",
-            "confirmation_type": confirmation_type,
-            "timestamp": datetime.now().isoformat(),
-            "rule_name": rule_name,
-            "rule_updated": rule_update_success,
-            "rule_status": rule_status,
-            "rule_progress": rule_progress,
-            "message": f"Parameter value confirmed and stored in memory for {input_name}. Rule '{rule_name}' {'updated automatically' if rule_update_success and rule_name else 'not updated (no rule_name provided)'}."
-        }
+        return vo.ConfirmParameterInputResponseVO(
+            success=True,
+            task_name=task_name,
+            input_name=input_name,
+            stored_value=validation_result["converted_value"],
+            data_type=task_input.dataType,
+            required=task_input.required,
+            storage_type="MEMORY",
+            confirmation_type=confirmation_type,
+            timestamp=datetime.now().isoformat(),
+            rule_name=rule_name,
+            rule_updated=rule_update_success,
+            rule_status=rule_status,
+            rule_progress=rule_progress,
+            message=f"Parameter value confirmed and stored in memory for {input_name}. Rule '{rule_name}' {'updated automatically' if rule_update_success and rule_name else 'not updated (no rule_name provided)'}.",
+        )
 
     except Exception as e:
-        return {"success": False, "error": f"Failed to confirm parameter input: {e}"}
+        return vo.ConfirmParameterInputResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                f"Failed to confirm parameter input: {e}",
+                "rules:confirm_parameter_input",
+            ),
+        )
 
 
 # INPUT VERIFICATION TOOLS - MANDATORY WORKFLOW STEPS
-@mcp.tool()
-def prepare_input_collection_overview(selected_tasks: List[Dict[str, str]], ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Prepare Input Collection Overview",read_only=True))
+def prepare_input_collection_overview(
+    selected_tasks: List[Dict[str, str]], ctx: Context | None = None
+) -> vo.InputCollectionOverviewResponseVO:
     """
     INPUT COLLECTION OVERVIEW & RULE CREATION
 
@@ -3390,7 +3749,13 @@ def prepare_input_collection_overview(selected_tasks: List[Dict[str, str]], ctx:
     """
 
     if not selected_tasks:
-        return {"success": False, "error": "No tasks selected for input analysis"}
+        return vo.InputCollectionOverviewResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                "No tasks selected for input analysis",
+                "rules:prepare_input_collection_overview",
+            ),
+        )
 
     try:
         input_analysis = {
@@ -3408,18 +3773,18 @@ def prepare_input_collection_overview(selected_tasks: List[Dict[str, str]], ctx:
         # Validate input format and task aliases
         for task_info in selected_tasks:
             if not isinstance(task_info, dict) or "task_name" not in task_info or "task_alias" not in task_info:
-                return {"success": False, "error": "Each task must be a dict with 'task_name' and 'task_alias' keys"}
+                return vo.InputCollectionOverviewResponseVO(success=False, error=utils.build_structured_error("Each task must be a dict with 'task_name' and 'task_alias' keys", "rules:prepare_input_collection_overview"))
             
             task_alias = task_info["task_alias"].strip()
             if not task_alias:
-                return {"success": False, "error": f"Task alias is required for task {task_info['task_name']}"}
+                return vo.InputCollectionOverviewResponseVO(success=False, error=utils.build_structured_error(f"Task alias is required for task {task_info['task_name']}", "rules:prepare_input_collection_overview"))
             
             if len(task_alias) > 100:
-                return {"success": False, "error": f"Task alias '{task_alias}' exceeds 100 character limit"}
+                return vo.InputCollectionOverviewResponseVO(success=False, error=utils.build_structured_error(f"Task alias '{task_alias}' exceeds 100 character limit", "rules:prepare_input_collection_overview"))
             
             # Check for duplicate aliases
             if task_alias in input_analysis["task_alias_map"]:
-                return {"success": False, "error": f"Duplicate task alias '{task_alias}' found. Each alias must be unique."}
+                return vo.InputCollectionOverviewResponseVO(success=False, error=utils.build_structured_error(f"Duplicate task alias '{task_alias}' found. Each alias must be unique.", "rules:prepare_input_collection_overview"))
             
             # Store task alias mapping
             input_analysis["task_alias_map"][task_alias] = {
@@ -3443,7 +3808,7 @@ def prepare_input_collection_overview(selected_tasks: List[Dict[str, str]], ctx:
             available_tasks = [TaskVO.from_dict(task) for task in tasks_resp["items"]]
 
         if not available_tasks:
-            return {"success": False, "error": "No tasks loaded"}
+            return vo.InputCollectionOverviewResponseVO(success=False, error=utils.build_structured_error("No tasks loaded", "rules:prepare_input_collection_overview"))
 
         # Analyze each selected task with its alias
         for task_info in selected_tasks:
@@ -3588,13 +3953,13 @@ def prepare_input_collection_overview(selected_tasks: List[Dict[str, str]], ctx:
             input_analysis
         )
         
-        return {
-            "success": True,
-            "input_analysis": input_analysis,
-            "overview_presentation": overview_text,
-            "task_alias_map": input_analysis["task_alias_map"],
-            "task_input_groups": input_analysis["task_input_groups"],  # NEW: For validation tracking
-            "mandatory_collection_plan": {
+        return vo.InputCollectionOverviewResponseVO(
+            success=True,
+            input_analysis=input_analysis,
+            overview_presentation=overview_text,
+            task_alias_map=input_analysis["task_alias_map"],
+            task_input_groups=input_analysis["task_input_groups"],
+            mandatory_collection_plan={
                 "step1": "Collect inputs task-wise for all defined tasks. For each task, gather all required inputs (e.g., if a task has three inputs, collect all three before proceeding).",
                 "step2": "After collecting all inputs for a specific task, **MANDATORY EXECUTION CHECKPOINT** - call execute_task(task_name, collected_inputs_dict, application_config) to execute the task with real data.",
                 "step3": "If execution fails, allow user to correct inputs and re-execute. Only proceed to next task when execution succeeds.",
@@ -3603,20 +3968,28 @@ def prepare_input_collection_overview(selected_tasks: List[Dict[str, str]], ctx:
                 "step6": "Finally, create the rule with verified task alias mappings and I/O mappings based on actual executed outputs.",
                 "critical_note": "**EXECUTION IS MANDATORY AND CANNOT BE SKIPPED** - Each task MUST be executed with real data before moving to the next task. This creates checkpoints ensuring real outputs are available for dependent tasks throughout the workflow."
             },
-            "rule_creation_ready": True,
-            "selected_tasks": selected_tasks,
-            "initial_inputs": initial_inputs,
-            "initial_inputs_meta": initial_inputs_meta,
-            "validation_checkpoint_count": len(selected_tasks),  # NEW: Number of validation checkpoints
-            "message": "Input overview prepared with task aliases and validation checkpoints. Present to user and get confirmation before proceeding.",
-            "next_action": "Show overview_presentation to user and wait for confirmation, then create initial rule and follow 'mandatory_collection_plan' with STRICT validation enforcement"
-        }
+            rule_creation_ready=True,
+            selected_tasks=selected_tasks,
+            initial_inputs=initial_inputs,
+            initial_inputs_meta=initial_inputs_meta,
+            validation_checkpoint_count=len(selected_tasks),
+            message="Input overview prepared with task aliases and validation checkpoints. Present to user and get confirmation before proceeding.",
+            next_action="Show overview_presentation to user and wait for confirmation, then create initial rule and follow 'mandatory_collection_plan' with STRICT validation enforcement",
+        )
 
     except Exception as e:
-        return {"success": False, "error": f"Failed to prepare input overview: {e}"}
+        return vo.InputCollectionOverviewResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                f"Failed to prepare input overview: {e}",
+                "rules:prepare_input_collection_overview",
+            ),
+        )
 
-@mcp.tool()
-def verify_collected_inputs(collected_inputs: Dict[str, Any], ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Verify Collected Inputs",read_only=True))
+def verify_collected_inputs(
+    collected_inputs: Dict[str, Any], ctx: Context | None = None
+) -> vo.VerifyCollectedInputsResponseVO:
     """Verify all collected inputs with user before rule creation.
 
     MANDATORY VERIFICATION STEP (Enhanced):
@@ -3698,7 +4071,13 @@ def verify_collected_inputs(collected_inputs: Dict[str, Any], ctx: Context | Non
     """
 
     if not collected_inputs:
-        return {"success": False, "error": "No inputs provided for verification"}
+        return vo.VerifyCollectedInputsResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                "No inputs provided for verification",
+                "rules:verify_collected_inputs",
+            ),
+        )
 
     try:
         # Analyze collected inputs with unique ID handling (preserved logic)
@@ -3825,27 +4204,35 @@ def verify_collected_inputs(collected_inputs: Dict[str, Any], ctx: Context | Non
         # Generate verification presentation (preserved)
         verification_text = rule.generate_verification_presentation_with_unique_ids(verification_summary)
 
-        return {
-            "success": True,
-            "verification_summary": verification_summary,
-            "verification_presentation": verification_text,
-            "ready_for_creation": len(verification_summary["missing_inputs"]) == 0,
-            "missing_count": len(verification_summary["missing_inputs"]),
-            "structured_inputs": verification_summary["structured_inputs"],
-            "inputs_meta": verification_summary["inputs_meta"],
-            "task_input_mapping": verification_summary["task_input_mapping"],
-            "task_alias_map": verification_summary["task_alias_map"],
-            "rule_finalization_ready": True,  # NEW: Ready for automatic rule finalization
-            "message": "Input verification prepared with task aliases. Present to user for confirmation, then automatically finalize rule.",
-            "next_action": "Show verification_presentation to user and wait for confirmation, then finalize rule"
-        }
+        return vo.VerifyCollectedInputsResponseVO(
+            success=True,
+            verification_summary=verification_summary,
+            verification_presentation=verification_text,
+            ready_for_creation=len(verification_summary["missing_inputs"]) == 0,
+            missing_count=len(verification_summary["missing_inputs"]),
+            structured_inputs=verification_summary["structured_inputs"],
+            inputs_meta=verification_summary["inputs_meta"],
+            task_input_mapping=verification_summary["task_input_mapping"],
+            task_alias_map=verification_summary["task_alias_map"],
+            rule_finalization_ready=True,
+            message="Input verification prepared with task aliases. Present to user for confirmation, then automatically finalize rule.",
+            next_action="Show verification_presentation to user and wait for confirmation, then finalize rule",
+        )
 
     except Exception as e:
-        return {"success": False, "error": f"Failed to verify collected inputs: {e}"}
+        return vo.VerifyCollectedInputsResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                f"Failed to verify collected inputs: {e}",
+                "rules:verify_collected_inputs",
+            ),
+        )
 
 
-@mcp.tool()
-def execute_task(task_name: str, task_inputs: Dict[str, Any], application: Dict[str, Any] = None, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Execute Task",read_only=False))
+def execute_task(
+    task_name: str, task_inputs: Dict[str, Any], application: Dict[str, Any] = None, ctx: Context | None = None
+) -> vo.ExecuteTaskResponseVO:
     """
     Execute a specific task with real data after collecting all required inputs.
 
@@ -3984,17 +4371,21 @@ def execute_task(task_name: str, task_inputs: Dict[str, Any], application: Dict[
     try:
         # Step 1: Get task details to understand expected input/output structure
         task_details = get_task_details.fn(task_name, ctx)
-        if task_details.get("error"):
-            return {
-                "success": False,
-                "execution_status": "FAILED",
-                "task_name": task_name,
-                "error": f"Could not fetch task details: {task_details['error']}",
-                "next_action": "verify_task_name"
-            }
+        task_details_payload = task_details.model_dump() if isinstance(task_details, BaseModel) else task_details
+        if task_details_payload.get("error"):
+            return vo.ExecuteTaskResponseVO(
+                success=False,
+                execution_status="FAILED",
+                task_name=task_name,
+                next_action="verify_task_name",
+                error=utils.build_structured_error(
+                    f"Could not fetch task details: {task_details_payload['error']}",
+                    "rules:execute_task",
+                ),
+            )
         
-        task_inputs_spec = task_details.get("inputs", [])
-        task_app_tags = task_details.get("appTags", {})
+        task_inputs_spec = task_details_payload.get("inputs", [])
+        task_app_tags = task_details_payload.get("appTags", {})
         task_app_types = task_app_tags.get("appType", [])
 
         # Step 2: Check if task requires application credentials
@@ -4003,15 +4394,18 @@ def execute_task(task_name: str, task_inputs: Dict[str, Any], application: Dict[
         requires_app = task_app_types and not is_nocredapp
 
         if requires_app and not application:
-            return {
-                "success": False,
-                "execution_status": "FAILED",
-                "task_name": task_name,
-                "error": f"Task '{task_name}' requires application credentials but none provided. Application credentials are required because appType is not 'nocredapp'.",
-                "required_app_type": task_app_types,
-                "next_action": "provide_application_credentials",
-                "hint": "Use get_applications_for_tag() to find existing applications or provide new credentials"
-            }
+            return vo.ExecuteTaskResponseVO(
+                success=False,
+                execution_status="FAILED",
+                task_name=task_name,
+                required_app_type=task_app_types,
+                next_action="provide_application_credentials",
+                hint="Use get_applications_for_tag() to find existing applications or provide new credentials",
+                error=utils.build_structured_error(
+                    f"Task '{task_name}' requires application credentials but none provided. Application credentials are required because appType is not 'nocredapp'.",
+                    "rules:execute_task",
+                ),
+            )
 
         # For nocredapp tasks, use hardcoded application structure if no application provided
         if is_nocredapp and not application:
@@ -4046,29 +4440,35 @@ def execute_task(task_name: str, task_inputs: Dict[str, Any], application: Dict[
                     input_value.startswith("<<") or
                     "previous_task" in input_value.lower()
                 ):
-                    return {
-                        "success": False,
-                        "execution_status": "FAILED",
-                        "task_name": task_name,
-                        "error": f"Input '{input_name}' requires output from a previous task that hasn't been executed",
-                        "input_name": input_name,
-                        "next_action": "execute_dependent_task",
-                        "hint": "Execute the dependent task first to get real output, then use that output as input here"
-                    }
+                    return vo.ExecuteTaskResponseVO(
+                        success=False,
+                        execution_status="FAILED",
+                        task_name=task_name,
+                        input_name=input_name,
+                        next_action="execute_dependent_task",
+                        hint="Execute the dependent task first to get real output, then use that output as input here",
+                        error=utils.build_structured_error(
+                            f"Input '{input_name}' requires output from a previous task that hasn't been executed",
+                            "rules:execute_task",
+                        ),
+                    )
                 
                 validated_inputs[input_name] = input_value
             elif is_required:
                 missing_inputs.append(input_name)
         
         if missing_inputs:
-            return {
-                "success": False,
-                "execution_status": "FAILED",
-                "task_name": task_name,
-                "error": f"Missing required inputs: {missing_inputs}",
-                "missing_inputs": missing_inputs,
-                "next_action": "collect_missing_inputs"
-            }
+            return vo.ExecuteTaskResponseVO(
+                success=False,
+                execution_status="FAILED",
+                task_name=task_name,
+                missing_inputs=missing_inputs,
+                next_action="collect_missing_inputs",
+                error=utils.build_structured_error(
+                    f"Missing required inputs: {missing_inputs}",
+                    "rules:execute_task",
+                ),
+            )
         
         # Step 4: Build execution request body
         request_body = {
@@ -4101,14 +4501,17 @@ def execute_task(task_name: str, task_inputs: Dict[str, Any], application: Dict[
         response = rule.execute_task(request_body, ctx)
         
         if not response:
-            return {
-                "success": False,
-                "execution_status": "FAILED",
-                "task_name": task_name,
-                "task_inputs": validated_inputs,
-                "error": "Task execution API returned no response",
-                "next_action": "retry_execution"
-            }
+            return vo.ExecuteTaskResponseVO(
+                success=False,
+                execution_status="FAILED",
+                task_name=task_name,
+                task_inputs=validated_inputs,
+                next_action="retry_execution",
+                error=utils.build_structured_error(
+                    "Task execution API returned no response",
+                    "rules:execute_task",
+                ),
+            )
         
         # Step 6: Parse execution response
         task_outputs = response.get("taskOutputs", {})
@@ -4129,40 +4532,43 @@ def execute_task(task_name: str, task_inputs: Dict[str, Any], application: Dict[
                 else:
                     error_details.append({"message": str(error)})
             
-            return {
-                "success": False,
-                "execution_status": "FAILED",
-                "task_name": task_name,
-                "task_inputs": validated_inputs,
-                "outputs": outputs,
-                "errors": error_details,
-                "message": f"❌ Task '{task_name}' execution failed. Please review errors.",
-                "next_action": "fix_execution_errors"
-            }
+            return vo.ExecuteTaskResponseVO(
+                success=False,
+                execution_status="FAILED",
+                task_name=task_name,
+                task_inputs=validated_inputs,
+                outputs=outputs,
+                errors=error_details,
+                message=f"❌ Task '{task_name}' execution failed. Please review errors.",
+                next_action="fix_execution_errors",
+            )
         
         # Step 7: Return successful execution results
-        return {
-            "success": True,
-            "execution_status": "COMPLETED",
-            "task_name": task_name,
-            "task_inputs": validated_inputs,
-            "outputs": outputs,
-            "output_files": {k: v for k, v in outputs.items() if isinstance(v, str) and (v.startswith("http") or v.startswith("/"))},
-            "message": f"✅ Task '{task_name}' executed successfully.",
-            "next_action": "proceed_to_next_task",
-            "hint": "Use the outputs from this task as inputs for dependent tasks"
-        }
+        return vo.ExecuteTaskResponseVO(
+            success=True,
+            execution_status="COMPLETED",
+            task_name=task_name,
+            task_inputs=validated_inputs,
+            outputs=outputs,
+            output_files={k: v for k, v in outputs.items() if isinstance(v, str) and (v.startswith("http") or v.startswith("/"))},
+            message=f"✅ Task '{task_name}' executed successfully.",
+            next_action="proceed_to_next_task",
+            hint="Use the outputs from this task as inputs for dependent tasks",
+        )
 
     except Exception as e:
         logger.error(f"Exception during task execution: {e}")
-        return {
-            "success": False,
-            "execution_status": "FAILED",
-            "task_name": task_name,
-            "error": f"Exception during execution: {str(e)}",
-            "exception_type": type(e).__name__,
-            "next_action": "review_exception"
-        }
+        return vo.ExecuteTaskResponseVO(
+            success=False,
+            execution_status="FAILED",
+            task_name=task_name,
+            exception_type=type(e).__name__,
+            next_action="review_exception",
+            error=utils.build_structured_error(
+                f"Exception during execution: {str(e)}",
+                "rules:execute_task",
+            ),
+        )
 
 def add_rule_tag(rule_name: str, ctx: Context | None = None) -> Dict[str, Any]:
     """
@@ -4204,8 +4610,8 @@ def add_rule_tag(rule_name: str, ctx: Context | None = None) -> Dict[str, Any]:
         }
 
 
-@mcp.tool()
-def generate_design_notes_preview(rule_name: str, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Generate Design Notes Preview",read_only=True))
+def generate_design_notes_preview(rule_name: str, ctx: Context | None = None) -> vo.DesignNotesPreviewResponseVO:
     """
     Generate design notes preview for user confirmation before actual creation.
 
@@ -4389,18 +4795,18 @@ def generate_design_notes_preview(rule_name: str, ctx: Context | None = None) ->
     # No intermediate API calls needed - MCP has all the template details in the docstring
     # The MCP will use fetch_rule() internally and build the complete notebook structure
     
-    return {
-        "success": True, 
-        "rule_name": rule_name,
-        "design_notes_structure": {},  # MCP will populate this with complete notebook dictionary
-        "sections_count": 7,
-        "message": f"MCP should construct complete notebook structure for rule '{rule_name}' based on the detailed template instructions above",
-        "next_action": "MCP should use fetch_rule() and build complete notebook dictionary, then return it in design_notes_structure"
-    }
+    return vo.DesignNotesPreviewResponseVO(
+        success=True,
+        rule_name=rule_name,
+        design_notes_structure={},
+        sections_count=7,
+        message=f"MCP should construct complete notebook structure for rule '{rule_name}' based on the detailed template instructions above",
+        next_action="MCP should use fetch_rule() and build complete notebook dictionary, then return it in design_notes_structure",
+    )
 
 
-@mcp.tool()
-def create_design_notes(rule_name: str, design_notes_structure: Dict[str, Any], ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Create Design Notes",read_only=False))
+def create_design_notes(rule_name: str, design_notes_structure: Dict[str, Any], ctx: Context | None = None) -> vo.DesignNotesMutationResponseVO:
     """
     Create and save design notes after user confirmation.
 
@@ -4440,30 +4846,36 @@ def create_design_notes(rule_name: str, design_notes_structure: Dict[str, Any], 
 
         message = save_resp.get("message")
         if isinstance(message, str) and message == "Design notes file created successfully.":
-            return {
-                "success": True,
-                "rule_name": rule_name,
-                "filename": f"{rule_name}.ipynb",
-                "sections_saved": len(design_notes_structure.get("cells", [])),
-                "message": f"Design notes successfully created and saved for rule '{rule_name}'"
-            }
+            return vo.DesignNotesMutationResponseVO(
+                success=True,
+                rule_name=rule_name,
+                filename=f"{rule_name}.ipynb",
+                sections_saved=len(design_notes_structure.get("cells", [])),
+                message=f"Design notes successfully created and saved for rule '{rule_name}'",
+            )
         else:
-            return {
-                "success": False,
-                "error": "Failed to save design notes",
-                "rule_name": rule_name
-            }
+            return vo.DesignNotesMutationResponseVO(
+                success=False,
+                rule_name=rule_name,
+                error=utils.build_structured_error(
+                    "Failed to save design notes",
+                    "rules:create_design_notes",
+                ),
+            )
             
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"Failed to save design notes: {e}",
-            "rule_name": rule_name
-        }
+        return vo.DesignNotesMutationResponseVO(
+            success=False,
+            rule_name=rule_name,
+            error=utils.build_structured_error(
+                f"Failed to save design notes: {e}",
+                "rules:create_design_notes",
+            ),
+        )
 
 
-@mcp.tool()
-def fetch_rule_design_notes(rule_name: str, ctx: Context | None = None) -> Dict[str,Any]:
+@mcp.tool(annotations=utils.tool_annotations("Fetch Rule Design Notes",read_only=True))
+def fetch_rule_design_notes(rule_name: str, ctx: Context | None = None) -> vo.FetchRuleDesignNotesResponseVO:
     """
     Fetch and manage design notes for a rule.
 
@@ -4530,30 +4942,34 @@ def fetch_rule_design_notes(rule_name: str, ctx: Context | None = None) -> Dict[
        
 
         if isinstance(design_notes_content,str) and design_notes_content!="":
-            return {
-                "success": True,
-                "rule_name": rule_name,
-                "filename": filename,
-                "designNotesContent": rule.decode_content(design_notes_content),
-                "message": f"Design notes successfully retrieved for rule {rule_name}. Displaying content to user."
-            }
+            return vo.FetchRuleDesignNotesResponseVO(
+                success=True,
+                rule_name=rule_name,
+                filename=filename,
+                designNotesContent=rule.decode_content(design_notes_content),
+                message=f"Design notes successfully retrieved for rule {rule_name}. Displaying content to user.",
+            )
         else:
-            return{
-                "success": False,
-                "rule_name": rule_name,
-                "message": f"Design notes not found for rule {rule_name}. Offer to create comprehensive design notes."
-            }
+            return vo.FetchRuleDesignNotesResponseVO(
+                success=False,
+                rule_name=rule_name,
+                message=f"Design notes not found for rule {rule_name}. Offer to create comprehensive design notes.",
+            )
         
     except Exception as e:
-        return {
-            "success": False,
-            "rule_name": rule_name,
-            "message": f"Error fetching design notes for rule {rule_name}: {e}."
-        }
+        return vo.FetchRuleDesignNotesResponseVO(
+            success=False,
+            rule_name=rule_name,
+            message=f"Error fetching design notes for rule {rule_name}: {e}.",
+            error=utils.build_structured_error(
+                f"Error fetching design notes for rule {rule_name}: {e}.",
+                "rules:fetch_rule_design_notes",
+            ),
+        )
 
 
-@mcp.tool()
-def generate_rule_readme_preview(rule_name: str, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Generate Rule Readme Preview",read_only=True))
+def generate_rule_readme_preview(rule_name: str, ctx: Context | None = None) -> vo.RuleReadmePreviewResponseVO:
     """
     Generate README.md preview for rule documentation before actual creation.
 
@@ -4764,19 +5180,19 @@ def generate_rule_readme_preview(rule_name: str, ctx: Context | None = None) -> 
     # No intermediate API calls needed - MCP has all the template details in the docstring
     # The MCP will use fetch_rule() internally and build the complete README content
     
-    return {
-        "success": True, 
-        "rule_name": rule_name,
-        "readme_content": "",  # MCP will populate this with complete README.md content
-        "sections_count": 12,
-        "estimated_length": "2000-3000 lines",
-        "message": f"MCP should construct complete README.md content for rule '{rule_name}' based on the detailed template instructions above",
-        "next_action": "MCP should use fetch_rule() and build complete README markdown content, then return it in readme_content"
-    }
+    return vo.RuleReadmePreviewResponseVO(
+        success=True,
+        rule_name=rule_name,
+        readme_content="",
+        sections_count=12,
+        estimated_length="2000-3000 lines",
+        message=f"MCP should construct complete README.md content for rule '{rule_name}' based on the detailed template instructions above",
+        next_action="MCP should use fetch_rule() and build complete README markdown content, then return it in readme_content",
+    )
 
 
-@mcp.tool()
-def create_rule_readme(rule_name: str, readme_content: str, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Create Rule Readme",read_only=False))
+def create_rule_readme(rule_name: str, readme_content: str, ctx: Context | None = None) -> vo.RuleReadmeMutationResponseVO:
     """
     Create and save README.md file after user confirmation.
 
@@ -4815,31 +5231,37 @@ def create_rule_readme(rule_name: str, readme_content: str, ctx: Context | None 
 
         message = save_resp.get("message")
         if isinstance(message, str) and message == "Read-me file created successfully.":
-            return {
-                "success": True,
-                "rule_name": rule_name,
-                "filename": "README.md",
-                "content_length": len(readme_content),
-                "sections_saved": readme_content.count("##"),  # Count markdown sections
-                "message": f"README.md successfully created and saved for rule '{rule_name}'"
-            }
+            return vo.RuleReadmeMutationResponseVO(
+                success=True,
+                rule_name=rule_name,
+                filename="README.md",
+                content_length=len(readme_content),
+                sections_saved=readme_content.count("##"),
+                message=f"README.md successfully created and saved for rule '{rule_name}'",
+            )
         else:
-            return {
-                "success": False,
-                "error": "Failed to save README.md",
-                "rule_name": rule_name
-            }
+            return vo.RuleReadmeMutationResponseVO(
+                success=False,
+                rule_name=rule_name,
+                error=utils.build_structured_error(
+                    "Failed to save README.md",
+                    "rules:create_rule_readme",
+                ),
+            )
             
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"Failed to save README.md: {e}",
-            "rule_name": rule_name
-        }
+        return vo.RuleReadmeMutationResponseVO(
+            success=False,
+            rule_name=rule_name,
+            error=utils.build_structured_error(
+                f"Failed to save README.md: {e}",
+                "rules:create_rule_readme",
+            ),
+        )
 
 
-@mcp.tool()
-def update_rule_readme(rule_name: str, updated_readme_content: str, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Update Rule Readme",read_only=False))
+def update_rule_readme(rule_name: str, updated_readme_content: str, ctx: Context | None = None) -> vo.RuleReadmeMutationResponseVO:
     """
     Update existing README.md file with new content.
 
@@ -4871,30 +5293,36 @@ def update_rule_readme(rule_name: str, updated_readme_content: str, ctx: Context
 
         message = update_resp.get("message")
         if isinstance(message, str) and message == "Read-me file created successfully.":
-            return {
-                "success": True,
-                "rule_name": rule_name,
-                "filename": "README.md",
-                "content_length": len(updated_readme_content),
-                "message": f"README.md successfully updated for rule '{rule_name}'"
-            }
+            return vo.RuleReadmeMutationResponseVO(
+                success=True,
+                rule_name=rule_name,
+                filename="README.md",
+                content_length=len(updated_readme_content),
+                message=f"README.md successfully updated for rule '{rule_name}'",
+            )
         else:
-            return {
-                "success": False,
-                "error": "Failed to update README.md",
-                "rule_name": rule_name
-            }
+            return vo.RuleReadmeMutationResponseVO(
+                success=False,
+                rule_name=rule_name,
+                error=utils.build_structured_error(
+                    "Failed to update README.md",
+                    "rules:update_rule_readme",
+                ),
+            )
                      
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"Failed to update README.md: {e}",
-            "rule_name": rule_name
-        }
+        return vo.RuleReadmeMutationResponseVO(
+            success=False,
+            rule_name=rule_name,
+            error=utils.build_structured_error(
+                f"Failed to update README.md: {e}",
+                "rules:update_rule_readme",
+            ),
+        )
 
 
-@mcp.tool()
-def get_application_info(tag_name: str, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Get Application Info",read_only=True))
+def get_application_info(tag_name: str, ctx: Context | None = None) -> vo.ApplicationInfoResponseVO:
     """
     Get detailed information about an application, including supported credential types.
 
@@ -4936,29 +5364,35 @@ def get_application_info(tag_name: str, ctx: Context | None = None) -> Dict[str,
         if rule.is_valid_array(app_resp, "items"):
             app_info = app_resp["items"][0]
             supported_creds = app_info.get("supportedCreds")
-            return {
-                "success": True, 
-                "app_name": tag_name,
-                "supportedCreds": supported_creds,
-                "message": f"Retrieved information for application '{tag_name}'. User can select credential type and provide values."
-            }
+            return vo.ApplicationInfoResponseVO(
+                success=True,
+                app_name=tag_name,
+                supportedCreds=supported_creds,
+                message=f"Retrieved information for application '{tag_name}'. User can select credential type and provide values.",
+            )
         else:
-            return {
-                "success": False, 
-                "app_name": tag_name,
-                "message": f"No credential information found for application '{tag_name}'."
-            }
+            return vo.ApplicationInfoResponseVO(
+                success=False,
+                app_name=tag_name,
+                message=f"No credential information found for application '{tag_name}'.",
+            )
 
     except Exception as e:
-        return {
-            "success": False, 
-            "app_name": tag_name,
-            "message": f"Error occurred while fetching application info for '{tag_name}': {e}"
-        }
+        return vo.ApplicationInfoResponseVO(
+            success=False,
+            app_name=tag_name,
+            message=f"Error occurred while fetching application info for '{tag_name}': {e}",
+            error=utils.build_structured_error(
+                f"Error occurred while fetching application info for '{tag_name}': {e}",
+                "rules:get_application_info",
+            ),
+        )
 
 
-@mcp.tool()
-def fetch_execution_progress(rule_name: str, execution_id: str, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Fetch Execution Progress",read_only=True))
+def fetch_execution_progress(
+    rule_name: str, execution_id: str, ctx: Context | None = None
+) -> vo.ExecutionProgressResponseVO:
     """
     Fetch execution progress for a running rule.
     
@@ -5116,63 +5550,61 @@ def fetch_execution_progress(rule_name: str, execution_id: str, ctx: Context | N
         continue_polling = overall_status not in ["COMPLETED", "ERROR"]
         
         # Create response
-        response = {
-            # Polling control
-            "continue_polling": continue_polling,
-            "polling_interval_seconds": 1,
-            "display_mode": "replace",  # Tell client to replace, not append
-            
-            # Current state
-            "status": overall_status,
-            "rule_name": rule_name,
-            "execution_id": execution_id,
-            
-            # Progress data
-            "overall_progress_percentage": task_summary.get("progressPercentage", 0),
-            "task_stats": {
+        response = vo.ExecutionProgressResponseVO(
+            success=True,
+            continue_polling=continue_polling,
+            polling_interval_seconds=1,
+            display_mode="replace",
+            status=overall_status,
+            rule_name=rule_name,
+            execution_id=execution_id,
+            overall_progress_percentage=task_summary.get("progressPercentage", 0),
+            task_stats={
                 "completed": task_stats["COMPLETED"],
                 "in_progress": task_stats["INPROGRESS"],
                 "error": task_stats["ERROR"],
                 "pending": task_stats["PENDING"],
                 "total": len(consolidated_tasks)
             },
-            
-            # Display data
-            "display_lines": display_lines,
-            "display_header": f"🔄 **Execution Progress** - {rule_name}",
-            "display_footer": f"Status: {overall_status} | Progress: {task_stats['COMPLETED']}/{len(consolidated_tasks)} tasks",
-            
-            # Metadata
-            "transaction_count": len(progress_array),
-            "unique_task_count": len(consolidated_tasks),
-            "timestamp": exec_progress_resp.get("timestamp", "")
-        }
+            display_lines=display_lines,
+            display_header=f"🔄 **Execution Progress** - {rule_name}",
+            display_footer=f"Status: {overall_status} | Progress: {task_stats['COMPLETED']}/{len(consolidated_tasks)} tasks",
+            transaction_count=len(progress_array),
+            unique_task_count=len(consolidated_tasks),
+            timestamp=exec_progress_resp.get("timestamp", ""),
+        )
         
         # Add completion data if finished
         if not continue_polling:
-            response["completion_summary"] = {
+            response.completion_summary = {
                 "final_status": overall_status,
                 "total_tasks": len(consolidated_tasks),
                 "successful_tasks": task_stats["COMPLETED"],
                 "failed_tasks": task_stats["ERROR"]
             }
-            response["display_header"] = f"✅ **Execution Complete** - {rule_name}" if overall_status == "COMPLETED" else f"❌ **Execution Failed** - {rule_name}"
+            response.display_header = f"✅ **Execution Complete** - {rule_name}" if overall_status == "COMPLETED" else f"❌ **Execution Failed** - {rule_name}"
         
         return response
         
     except Exception as e:
-        return {
-            "continue_polling": False,
-            "status": "ERROR",
-            "rule_name": rule_name,
-            "execution_id": execution_id,
-            "error": str(e),
-            "display_header": "❌ **Error Fetching Progress**",
-            "display_lines": [{"text": f"Error: {e}"}]
-        }
+        return vo.ExecutionProgressResponseVO(
+            success=False,
+            continue_polling=False,
+            status="ERROR",
+            rule_name=rule_name,
+            execution_id=execution_id,
+            display_header="❌ **Error Fetching Progress**",
+            display_lines=[{"text": f"Error: {e}"}],
+            error=utils.build_structured_error(
+                str(e),
+                "rules:fetch_execution_progress",
+            ),
+        )
 
-@mcp.tool()
-def fetch_output_file(file_url: str, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Fetch Output File",read_only=True))
+def fetch_output_file(
+    file_url: str, ctx: Context | None = None
+) -> vo.FetchOutputFileResponseVO:
     """Fetch and display content of an output file from rule execution.
 
     FILE OUTPUT HANDLING:
@@ -5258,26 +5690,29 @@ def fetch_output_file(file_url: str, ctx: Context | None = None) -> Dict[str, An
                     display_content += "\n... (truncated)"
                 user_message = f"📄 File ({file_size_kb:.2f}KB). Showing first 3 of {len(lines)} lines, You can download it using the link below."
 
-        return {
-            "success": True,
-            "file_url": file_url,
-            "filename": filename,
-            "file_format": file_format,
-            "file_size_kb": round(file_size_kb, 2),
-            "display_content": display_content,
-            "user_message": user_message
-        }
+        return vo.FetchOutputFileResponseVO(
+            success=True,
+            file_url=file_url,
+            filename=filename,
+            file_format=file_format,
+            file_size_kb=round(file_size_kb, 2),
+            display_content=display_content,
+            user_message=user_message,
+        )
 
     except Exception as e:
-        return {
-            "success": False,
-            "file_url": file_url,
-            "error": f"Failed to fetch file: {e}"
-        }
+        return vo.FetchOutputFileResponseVO(
+            success=False,
+            file_url=file_url,
+            error=utils.build_structured_error(
+                f"Failed to fetch file: {e}",
+                "rules:fetch_output_file",
+            ),
+        )
 
 
-@mcp.tool()
-def fetch_applications(ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Fetch Applications",read_only=True))
+def fetch_applications(ctx: Context | None = None) -> vo.FetchApplicationsResponseVO:
     """ 
     Fetch all available applications from the system.
     
@@ -5296,11 +5731,11 @@ def fetch_applications(ctx: Context | None = None) -> Dict[str, Any]:
         # Add null safety
         items = get_app_resp.get("items", [])
         if not items:
-            return {
-                "success": True,
-                "applications": [],
-                "message": "No applications found"
-            }
+            return vo.FetchApplicationsResponseVO(
+                success=True,
+                applications=[],
+                message="No applications found",
+            )
         
         for item in items:
             meta = item.get("meta", {})
@@ -5316,20 +5751,22 @@ def fetch_applications(ctx: Context | None = None) -> Dict[str, Any]:
                 "app_type": app_types[0]
             })
 
-        return {
-            "success": True,
-            "applications": applications
-        }
+        return vo.FetchApplicationsResponseVO(success=True, applications=applications)
         
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"Failed to fetch applications: {str(e)}",
-            "applications": []
-        }
+        return vo.FetchApplicationsResponseVO(
+            success=False,
+            applications=[],
+            error=utils.build_structured_error(
+                f"Failed to fetch applications: {str(e)}",
+                "rules:fetch_applications",
+            ),
+        )
 
-@mcp.tool()
-def prepare_applications_for_execution(rule_name: str, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Prepare Applications For Execution",read_only=True))
+def prepare_applications_for_execution(
+    rule_name: str, ctx: Context | None = None
+) -> vo.PrepareApplicationsForExecutionResponseVO:
     """
     Analyze rule tasks and prepare application configuration requirements for execution.
 
@@ -5375,13 +5812,18 @@ def prepare_applications_for_execution(rule_name: str, ctx: Context | None = Non
     try:
         # Fetch the rule
         rule_result = fetch_rule.fn(rule_name, ctx)
-        if not rule_result.get("success"):
-            return {
-                "success": False,
-                "error": f"Could not fetch rule '{rule_name}': {rule_result.get('error')}"
-            }
+        rule_result_payload = rule_result.model_dump() if isinstance(rule_result, BaseModel) else rule_result
+        if not rule_result_payload.get("success"):
+            return vo.PrepareApplicationsForExecutionResponseVO(
+                success=False,
+                rule_name=rule_name,
+                error=utils.build_structured_error(
+                    f"Could not fetch rule '{rule_name}': {rule_result_payload.get('error')}",
+                    "rules:prepare_applications_for_execution",
+                ),
+            )
         
-        rule_structure = rule_result.get("rule_structure", {})
+        rule_structure = rule_result_payload.get("rule_structure", {})
         tasks = rule_structure.get("spec", {}).get("tasks", [])
         
         # Analyze tasks by appType
@@ -5449,28 +5891,32 @@ def prepare_applications_for_execution(rule_name: str, ctx: Context | None = Non
             message = "Analysis complete. No application configuration required - all tasks use 'nocredapp'. You can execute the rule directly."
             guidance.append("✅ No application configuration needed - all tasks use 'nocredapp' appType.")
 
-        return {
-            "success": True,
-            "rule_name": rule_name,
-            "app_type_tasks": app_type_tasks,
-            "tasks_needing_apps": tasks_needing_apps,
-            "needs_differentiation": needs_differentiation,
-            "total_app_types": len(app_type_tasks),
-            "applications_required": applications_required,
-            "guidance": guidance,
-            "next_steps": next_steps,
-            "message": message
-        }
+        return vo.PrepareApplicationsForExecutionResponseVO(
+            success=True,
+            rule_name=rule_name,
+            app_type_tasks=app_type_tasks,
+            tasks_needing_apps=tasks_needing_apps,
+            needs_differentiation=needs_differentiation,
+            total_app_types=len(app_type_tasks),
+            applications_required=applications_required,
+            guidance=guidance,
+            next_steps=next_steps,
+            message=message,
+        )
         
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"Failed to analyze rule: {str(e)}"
-        }
+        return vo.PrepareApplicationsForExecutionResponseVO(
+            success=False,
+            rule_name=rule_name,
+            error=utils.build_structured_error(
+                f"Failed to analyze rule: {str(e)}",
+                "rules:prepare_applications_for_execution",
+            ),
+        )
 
 
-@mcp.tool()
-def add_unique_identifier_to_task(rule_name: str, task_alias: str, identifier_key: str, identifier_value: str, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Add Unique Identifier To Task",read_only=False))
+def add_unique_identifier_to_task(rule_name: str, task_alias: str, identifier_key: str, identifier_value: str, ctx: Context | None = None) -> vo.AddUniqueIdentifierResponseVO:
     """
     Add a unique identifier key-value pair to a specific task's appTags.
 
@@ -5505,13 +5951,19 @@ def add_unique_identifier_to_task(rule_name: str, task_alias: str, identifier_ke
     try:
         # Fetch the rule
         rule_result = fetch_rule.fn(rule_name, ctx)
-        if not rule_result.get("success"):
-            return {
-                "success": False,
-                "error": f"Could not fetch rule '{rule_name}': {rule_result.get('error')}"
-            }
+        rule_result_payload = rule_result.model_dump() if isinstance(rule_result, BaseModel) else rule_result
+        if not rule_result_payload.get("success"):
+            return vo.AddUniqueIdentifierResponseVO(
+                success=False,
+                rule_name=rule_name,
+                task_alias=task_alias,
+                error=utils.build_structured_error(
+                    f"Could not fetch rule '{rule_name}': {rule_result_payload.get('error')}",
+                    "rules:add_unique_identifier_to_task",
+                ),
+            )
         
-        rule_structure = rule_result.get("rule_structure", {})
+        rule_structure = rule_result_payload.get("rule_structure", {})
         tasks = rule_structure.get("spec", {}).get("tasks", [])
         
         # Find and update the task
@@ -5531,10 +5983,15 @@ def add_unique_identifier_to_task(rule_name: str, task_alias: str, identifier_ke
                 break
         
         if not task_found:
-            return {
-                "success": False,
-                "error": f"Task with alias '{task_alias}' not found in rule '{rule_name}'"
-            }
+            return vo.AddUniqueIdentifierResponseVO(
+                success=False,
+                rule_name=rule_name,
+                task_alias=task_alias,
+                error=utils.build_structured_error(
+                    f"Task with alias '{task_alias}' not found in rule '{rule_name}'",
+                    "rules:add_unique_identifier_to_task",
+                ),
+            )
         
         # Update the rule
         rule_structure["spec"]["tasks"] = tasks
@@ -5554,42 +6011,55 @@ def add_unique_identifier_to_task(rule_name: str, task_alias: str, identifier_ke
             update_result = create_rule.fn(rule_structure, True, ctx)
         else:
             update_result = create_rule.fn(rule_structure, ctx)
+        update_result_payload = update_result.model_dump() if isinstance(update_result, BaseModel) else update_result
         
-        if not update_result.get("success"):
-            return {
-                "success": False,
-                "error": f"Failed to update rule: {update_result.get('error')}"
-            }
+        if not update_result_payload.get("success"):
+            return vo.AddUniqueIdentifierResponseVO(
+                success=False,
+                rule_name=rule_name,
+                task_alias=task_alias,
+                error=utils.build_structured_error(
+                    f"Failed to update rule: {update_result_payload.get('error')}",
+                    "rules:add_unique_identifier_to_task",
+                ),
+            )
         
-        return {
-            "success": True,
-            "rule_name": rule_name,
-            "task_alias": task_alias,
-            "identifier_added": {
+        return vo.AddUniqueIdentifierResponseVO(
+            success=True,
+            rule_name=rule_name,
+            task_alias=task_alias,
+            identifier_added={
                 "key": identifier_key,
-                "value": identifier_value
+                "value": identifier_value,
             },
-            "updated_app_tags": updated_task.get("appTags", {}),
-            "message": f"Added '{identifier_key}': ['{identifier_value}'] to task '{task_alias}'",
-            "next_step": f"When configuring application for this task, include '{identifier_key}': ['{identifier_value}'] in appTags",
-            "application_config_example": {
+            updated_app_tags=updated_task.get("appTags", {}),
+            message=f"Added '{identifier_key}': ['{identifier_value}'] to task '{task_alias}'",
+            next_step=f"When configuring application for this task, include '{identifier_key}': ['{identifier_value}'] in appTags",
+            application_config_example={
                 "applicationType": "<application_class_name>",
                 "applicationId": "<app_id> OR provide credentials",
                 "appTags": {
                     "appType": task_app_types,
-                    identifier_key: [identifier_value]
-                }
-            }
-        }
+                    identifier_key: [identifier_value],
+                },
+            },
+        )
         
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"Failed to add unique identifier: {str(e)}"
-        }
+        return vo.AddUniqueIdentifierResponseVO(
+            success=False,
+            rule_name=rule_name,
+            task_alias=task_alias,
+            error=utils.build_structured_error(
+                f"Failed to add unique identifier: {str(e)}",
+                "rules:add_unique_identifier_to_task",
+            ),
+        )
 
-@mcp.tool()
-def check_rule_status(rule_name: str, ctx: Context | None = None) -> Dict[str, Any]:
+@mcp.tool(annotations=utils.tool_annotations("Check Rule Status",read_only=True))
+def check_rule_status(
+    rule_name: str, ctx: Context | None = None
+) -> vo.CheckRuleStatusResponseVO:
     """
     Quick status check showing what's been collected and what's missing.
     Perfect for resuming in new chat windows.
@@ -5618,14 +6088,18 @@ def check_rule_status(rule_name: str, ctx: Context | None = None) -> Dict[str, A
     
     try:
         current_rule = fetch_rule.fn(rule_name, ctx)
-        if not current_rule["success"]:
-            return {
-                "success": False, 
-                "error": f"Rule '{rule_name}' not found. Start new rule creation?",
-                "suggested_action": "create_new_rule"
-            }
+        current_rule_payload = current_rule.model_dump() if isinstance(current_rule, BaseModel) else current_rule
+        if not current_rule_payload["success"]:
+            return vo.CheckRuleStatusResponseVO(
+                success=False,
+                suggested_action="create_new_rule",
+                error=utils.build_structured_error(
+                    f"Rule '{rule_name}' not found. Start new rule creation?",
+                    "rules:check_rule_status",
+                ),
+            )
         
-        rule_structure = current_rule["rule_structure"]
+        rule_structure = current_rule_payload["rule_structure"]
         meta = rule_structure.get("meta", {})
         spec = rule_structure.get("spec", {})
         
@@ -5790,10 +6264,10 @@ def check_rule_status(rule_name: str, ctx: Context | None = None) -> Dict[str, A
             "resume_instructions": f"To continue, simply say 'Continue with {rule_name}' or mention the specific action needed."
         }
         
-        return {
-            "success": True,
-            "status_info": status_info,
-            "rule_structure_summary": {
+        return vo.CheckRuleStatusResponseVO(
+            success=True,
+            status_info=status_info,
+            rule_structure_summary={
                 "has_tasks": completion_analysis["has_tasks"],
                 "has_inputs": completion_analysis["has_inputs"],
                 "has_outputs": completion_analysis["has_mandatory_outputs"],
@@ -5808,17 +6282,23 @@ def check_rule_status(rule_name: str, ctx: Context | None = None) -> Dict[str, A
                 "components_missing": len(missing_components),
                 "components_complete": 4 - len(missing_components)  # tasks, inputs, outputs, io_mapping
             },
-            "auto_inference_details": {
+            auto_inference_details={
                 "status_source": "analyzed_rule_content",
                 "progress_source": "calculated_from_components",
                 "phase_source": "inferred_from_structure",
                 "reliable": True,
                 "analysis_timestamp": datetime.now().isoformat()
             }
-        }
+        )
         
     except Exception as e:
-        return {"success": False, "error": f"Failed to check rule status: {e}"}   
+        return vo.CheckRuleStatusResponseVO(
+            success=False,
+            error=utils.build_structured_error(
+                f"Failed to check rule status: {e}",
+                "rules:check_rule_status",
+            ),
+        )   
 
 def create_initial_rule_from_planning(rule_name: str, purpose: str, description: str, selected_tasks: List[Dict], primary_app_type: str = None) -> Dict[str, Any]:
     """
@@ -5833,10 +6313,17 @@ def create_initial_rule_from_planning(rule_name: str, purpose: str, description:
         app_types = []
         for task_info in selected_tasks:
             task_details = get_task_details.fn(task_info["task_name"], None)  # No context available in this helper function
-            if task_details.get("appTags", {}).get("appType"):
-                app_types.extend(task_details["appTags"]["appType"])
+            task_details_payload = task_details.model_dump() if isinstance(task_details, BaseModel) else task_details
+            if task_details_payload.get("appTags", {}).get("appType"):
+                app_types.extend(task_details_payload["appTags"]["appType"])
         unique_app_types = list(set([t for t in app_types if t != "nocredapp"]))
         primary_app_type = unique_app_types[0] if unique_app_types else "generic"
+
+    task_app_tags = {}
+    for task_info in selected_tasks:
+        task_details = get_task_details.fn(task_info["task_name"], None)
+        task_details_payload = task_details.model_dump() if isinstance(task_details, BaseModel) else task_details
+        task_app_tags[task_info["task_name"]] = task_details_payload.get("appTags", {})
 
     # Build initial rule structure with tasks but no inputs
     initial_rule_structure = {
@@ -5870,7 +6357,7 @@ def create_initial_rule_from_planning(rule_name: str, purpose: str, description:
                     "name": task_info["task_name"],
                     "alias": task_info["task_alias"],
                     "type": "task",
-                    "appTags": get_task_details.fn(task_info["task_name"], None).get("appTags", {}),  # No context available in this helper function
+                    "appTags": task_app_tags.get(task_info["task_name"], {}),
                     "purpose": task_info.get("purpose", f"Task {task_info['task_alias']}")
                 }
                 for task_info in selected_tasks
@@ -5880,7 +6367,7 @@ def create_initial_rule_from_planning(rule_name: str, purpose: str, description:
     }
     
     # Create rule - status will be auto-detected as DRAFT
-    return create_rule.fn(initial_rule_structure)
+    return create_rule.fn(initial_rule_structure, False)
 
 def finalize_rule_with_io_mapping(rule_name: str, task_input_mapping: Dict = None, ctx: Context | None = None) -> Dict[str, Any]:
     """
@@ -5893,10 +6380,11 @@ def finalize_rule_with_io_mapping(rule_name: str, task_input_mapping: Dict = Non
     try:
         # Fetch current rule
         current_rule = fetch_rule.fn(rule_name, ctx)
-        if not current_rule["success"]:
+        current_rule_payload = current_rule.model_dump() if isinstance(current_rule, BaseModel) else current_rule
+        if not current_rule_payload["success"]:
             return {"success": False, "error": f"Rule '{rule_name}' not found"}
         
-        rule_structure = current_rule["rule_structure"]
+        rule_structure = current_rule_payload["rule_structure"]
         
         # Build I/O mapping from existing rule structure
         tasks = rule_structure["spec"]["tasks"]
@@ -5936,7 +6424,7 @@ def finalize_rule_with_io_mapping(rule_name: str, task_input_mapping: Dict = Non
         rule_structure["spec"]["ioMap"] = io_map
         
         # Update rule - status will be auto-detected as ACTIVE
-        return create_rule.fn(rule_structure, ctx)
+        return create_rule.fn(rule_structure, True, ctx)
         
     except Exception as e:
         return {"success": False, "error": f"Failed to finalize rule: {e}"}
@@ -6080,8 +6568,8 @@ def alterntive_prompt() -> str:
     return "When generating the JQ expression, do not hard-code any values from the previous task’s output. If your requirement involves comparing or merging two files, use ExecuteSqlQueryV2 instead."
 
 if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
-    @mcp.tool()
-    def fetch_rules_suggestions(user_requirement: str, summary_string: str, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Fetch Rules Suggestions",read_only=True))
+    def fetch_rules_suggestions(user_requirement: str, summary_string: str, ctx: Context | None = None) -> vo.RulesSuggestionResponseVO:
         """
         Tool-based version of `fetch_rules_and_tasks_suggestions` for improved compatibility and prevention of duplicate rule creation.
 
@@ -6188,16 +6676,39 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
         try:
             rule_response = rule.fetch_rules_and_tasks_suggestions(query=summary_string, identifierType="rules", ctx=ctx)
             if not rule_response:
-                return {"error": f"No rule found that matches the specified requirements."}
-            return rule_response
+                return vo.RulesSuggestionResponseVO(
+                    success=False,
+                    message="No rule found that matches the specified requirements.",
+                    error=utils.build_structured_error(
+                        "No rule found that matches the specified requirements.",
+                        "rules:fetch_rules_suggestions",
+                    ),
+                )
+            if isinstance(rule_response, dict) and rule_response.get("error"):
+                return vo.RulesSuggestionResponseVO(
+                    success=False,
+                    error=utils.build_structured_error(
+                        rule_response.get("error"),
+                        "rules:fetch_rules_suggestions",
+                    ),
+                )
+            return vo.RulesSuggestionResponseVO(
+                success=True,
+                rules=rule_response,
+                message=f"Found {len(rule_response)} suggested rules for the provided requirement.",
+            )
         except Exception as e:
-            return {
-                "error": f"An error occurred while retrieving the rule with the specified details: {e}"
-            }
+            return vo.RulesSuggestionResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"An error occurred while retrieving the rule with the specified details: {e}",
+                    "rules:fetch_rules_suggestions",
+                ),
+            )
             
     # Alternative tool version for task details
-    @mcp.tool()
-    def get_task_details(task_name: str, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Get Task Details",read_only=True))
+    def get_task_details(task_name: str, ctx: Context | None = None) -> vo.TaskDetailsResponseVO:
         """
         Tool-based version of get_task_details for improved compatibility.
 
@@ -6274,15 +6785,56 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
             if rule.is_valid_key(tasks_resp, "items", array_check=True):
                 task = TaskVO.from_dict(tasks_resp["items"][0])
             if not task:
-                return {"error": f"Task '{task_name}' not found"}
+                return vo.TaskDetailsResponseVO(
+                    success=False,
+                    message=f"Task '{task_name}' not found",
+                    error=utils.build_structured_error(
+                        f"Task '{task_name}' not found",
+                        "rules:get_task_details",
+                    ),
+                )
             # Return same detailed information as resource
             readme_content = rule.decode_content(task.readmeData)
-            return {"name": task.name, "description": task.description, "tags": task.tags, "appTags": task.appTags, "readme_content": readme_content, "inputs": [{"name": inp.name, "description": inp.description, "dataType": inp.dataType, "required": inp.required, "has_template": bool(inp.templateFile), "format": inp.format if inp.templateFile else None} for inp in task.inputs], "outputs": [{"name": out.name, "description": out.description, "dataType": out.dataType} for out in task.outputs], "template_count": len([inp for inp in task.inputs if inp.templateFile]), "message": f"Use get_template_guidance('{task.name}', '<input_name>') for template details"}
+            return vo.TaskDetailsResponseVO(
+                success=True,
+                name=task.name,
+                description=task.description,
+                tags=task.tags,
+                appTags=task.appTags,
+                readme_content=readme_content,
+                inputs=[
+                    vo.TaskInputDetailsVO(
+                        name=inp.name,
+                        description=inp.description,
+                        dataType=inp.dataType,
+                        required=inp.required,
+                        has_template=bool(inp.templateFile),
+                        format=inp.format if inp.templateFile else None,
+                    )
+                    for inp in task.inputs
+                ],
+                outputs=[
+                    vo.TaskOutputDetailsVO(
+                        name=out.name,
+                        description=out.description,
+                        dataType=out.dataType,
+                    )
+                    for out in task.outputs
+                ],
+                template_count=len([inp for inp in task.inputs if inp.templateFile]),
+                message=f"Use get_template_guidance('{task.name}', '<input_name>') for template details",
+            )
         except Exception as e:
-            return {"error": f"An error occurred while fetching the task {task_name} details: {e}"}
+            return vo.TaskDetailsResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"An error occurred while fetching the task {task_name} details: {e}",
+                    "rules:get_task_details",
+                ),
+            )
     
-    @mcp.tool()
-    def create_rule(rule_structure: Dict[str, Any], is_update: bool, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Create Rule",read_only=False))
+    def create_rule(rule_structure: Dict[str, Any], is_update: bool, ctx: Context | None = None) -> vo.RuleCreateUpdateResponseVO:
         """Create a rule with the provided structure.
 
         COMPLETE RULE CREATION PROCESS WITH PROGRESSIVE SAVING:
@@ -6458,7 +7010,14 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
             # Validate rule structure (preserve original validation)
             validation_result = rule.validate_rule_structure(rule_structure)
             if not validation_result["valid"]:
-                return {"success": False, "error": "Invalid rule structure", "validation_errors": validation_result["errors"]}
+                return vo.RuleCreateUpdateResponseVO(
+                    success=False,
+                    validation_errors=validation_result["errors"],
+                    error=utils.build_structured_error(
+                        "Invalid rule structure",
+                        "rules:create_rule",
+                    ),
+                )
 
             # Additional validation for task aliases in I/O mappings (preserved from original)
             tasks_section = rule_structure.get("spec", {}).get("tasks", [])
@@ -6481,19 +7040,25 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
                     if not left_side.startswith("*."):
                         alias_part = left_side.split(".")[0]
                         if alias_part not in valid_aliases and alias_part != "*":
-                            return {
-                                "success": False,
-                                "error": f"Unknown task alias '{alias_part}' in I/O mapping: {mapping}. Valid aliases: {list(valid_aliases)}"
-                            }
+                            return vo.RuleCreateUpdateResponseVO(
+                                success=False,
+                                error=utils.build_structured_error(
+                                    f"Unknown task alias '{alias_part}' in I/O mapping: {mapping}. Valid aliases: {list(valid_aliases)}",
+                                    "rules:create_rule",
+                                ),
+                            )
                     
                     # Check right side for task alias  
                     if not right_side.startswith("*."):
                         alias_part = right_side.split(".")[0]
                         if alias_part not in valid_aliases and alias_part != "*":
-                            return {
-                                "success": False,
-                                "error": f"Unknown task alias '{alias_part}' in I/O mapping: {mapping}. Valid aliases: {list(valid_aliases)}"
-                            }
+                            return vo.RuleCreateUpdateResponseVO(
+                                success=False,
+                                error=utils.build_structured_error(
+                                    f"Unknown task alias '{alias_part}' in I/O mapping: {mapping}. Valid aliases: {list(valid_aliases)}",
+                                    "rules:create_rule",
+                                ),
+                            )
 
                     # Validate right side (source) output exists in task
                     if not right_side.startswith("*."):
@@ -6515,11 +7080,12 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
                                     # Get task details to validate output exists
                                     task_name = source_task.get("name")
                                     task_details= get_task_details.fn(task_name, ctx)
-                                    if task_details.get("error"):
-                                        io_mapping_errors.append(f"Could not validate task '{task_name}': {task_details['error']}")
+                                    task_details_payload = task_details.model_dump() if isinstance(task_details, BaseModel) else task_details
+                                    if task_details_payload.get("error"):
+                                        io_mapping_errors.append(f"Could not validate task '{task_name}': {task_details_payload['error']}")
                                     else:
                                         # Check if the output exists in task definition
-                                        task_outputs = task_details.get("outputs", [])
+                                        task_outputs = task_details_payload.get("outputs", [])
                                         valid_output_names = [out["name"] for out in task_outputs]
                                         
                                         if output_name not in valid_output_names:
@@ -6530,12 +7096,15 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
 
             # Return validation errors if any I/O mapping issues found
             if io_mapping_errors:
-                return {
-                    "success": False,
-                    "error": "I/O mapping validation failed",
-                    "validation_errors": io_mapping_errors,
-                    "message": "Some I/O mappings reference outputs that don't exist in the specified tasks"
-                }    
+                return vo.RuleCreateUpdateResponseVO(
+                    success=False,
+                    validation_errors=io_mapping_errors,
+                    message="Some I/O mappings reference outputs that don't exist in the specified tasks",
+                    error=utils.build_structured_error(
+                        "I/O mapping validation failed",
+                        "rules:create_rule",
+                    ),
+                )
 
             # NEW: AUTOMATIC STATUS DETECTION based on rule content
             spec = rule_structure.get("spec", {})
@@ -6545,11 +7114,12 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
             primary_app_type_array = meta.get("labels", {}).get("appType", [])
             primary_app_type = primary_app_type_array[0] if primary_app_type_array else None
             applications_response = fetch_applications.fn(ctx)
+            applications_response_payload = applications_response.model_dump() if isinstance(applications_response, BaseModel) else applications_response
             application_class_name = None
 
             # Find matching application class name for primary app type
-            if applications_response and applications_response.get("success") and primary_app_type:
-                for app in applications_response.get("applications"):
+            if applications_response_payload and applications_response_payload.get("success") and primary_app_type:
+                for app in applications_response_payload.get("applications"):
                     app_type = app.get("app_type")
                     # Check if any app type from primary_app_type matches any app type from the application
                     if app_type == primary_app_type:
@@ -6692,8 +7262,9 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
             #Add MCP tag to the rule with proper error handling
             try:
                 tag_result = add_rule_tag(rule_name, ctx)
-                if not tag_result.get("success", False):
-                    tag_message = tag_result.get("message", "Unknown error occurred")
+                tag_result_payload = tag_result.model_dump() if isinstance(tag_result, BaseModel) else tag_result
+                if not tag_result_payload.get("success", False):
+                    tag_message = tag_result_payload.get("message", "Unknown error occurred")
                     tag_status = {
                         "tagged": False,
                         "message": f"Rule created successfully but MCP tag addition failed: {tag_message}"
@@ -6701,7 +7272,7 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
                 else:
                     tag_status = {
                         "tagged": True,
-                        "message": tag_result.get("message", "MCP tag added successfully")
+                        "message": tag_result_payload.get("message", "MCP tag added successfully")
                     }
             except Exception as e:
                 tag_status = {
@@ -6709,34 +7280,46 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
                     "message": f"Rule created successfully but MCP tag addition encountered an exception: {e}"
                 }
 
-            return {
-                "success": True,
-                "rule_id": result["rule_id"],
-                "rule_name": rule_name,
-                "is_update": is_update,
-                "detected_status": auto_status,
-                "creation_phase": creation_phase,
-                "progress_percentage": progress_percentage,
-                "completion_analysis": completion_analysis,
-                "message": f"Rule {'updated' if is_update else 'created'} successfully with meaningful task aliases - Status: {auto_status} ({progress_percentage}% complete)",
-                "rule_structure": rule_structure,
-                "yaml_preview": yaml_preview,
-                "timestamp": result.get("timestamp"),
-                "status": result.get("status", auto_status),
-                "design_notes_info": design_notes_result,
-                "readme_info": readme_info,
-                "tag_status": tag_status,
-                "ui_url" : ui_url,
-                "next_step": determine_next_action(creation_phase, completion_analysis)
-            }
+            return vo.RuleCreateUpdateResponseVO(
+                success=True,
+                rule_id=result["rule_id"],
+                rule_name=rule_name,
+                is_update=is_update,
+                detected_status=auto_status,
+                creation_phase=creation_phase,
+                progress_percentage=progress_percentage,
+                completion_analysis=completion_analysis,
+                message=f"Rule {'updated' if is_update else 'created'} successfully with meaningful task aliases - Status: {auto_status} ({progress_percentage}% complete)",
+                rule_structure=rule_structure,
+                yaml_preview=yaml_preview,
+                timestamp=result.get("timestamp"),
+                status=result.get("status", auto_status),
+                design_notes_info=design_notes_result,
+                readme_info=readme_info,
+                tag_status=tag_status,
+                ui_url=ui_url,
+                next_step=determine_next_action(creation_phase, completion_analysis),
+            )
             
         except exception.CCowExceptionVO as e:
-            return {"success": False, "error": f"Failed to create/update rule: {e.to_dict()}"}
+            return vo.RuleCreateUpdateResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Failed to create/update rule: {e.to_dict()}",
+                    "rules:create_rule",
+                ),
+            )
         except Exception as e:
-            return {"success": False, "error": f"Failed to create/update rule: {e}"}
+            return vo.RuleCreateUpdateResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Failed to create/update rule: {e}",
+                    "rules:create_rule",
+                ),
+            )
     
-    @mcp.tool()
-    def fetch_rule(rule_name: str, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Fetch Rule",read_only=True))
+    def fetch_rule(rule_name: str, ctx: Context | None = None) -> vo.RuleDetailsResponseVO:
         """
         Fetch rule details by rule name.
         
@@ -6788,29 +7371,35 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
                     rule_structure['apiVersion']="rule.policycow.live/v1alpha1"
 
 
-                return {
-                    "success": True,
-                    "rule_name": rule_name,
-                    "rule_structure": rule_structure,  # Complete rule as dictionary
-                    "message": f"Rule '{rule_name}' retrieved successfully"
-                }
+                return vo.RuleDetailsResponseVO(
+                    success=True,
+                    rule_name=rule_name,
+                    rule_structure=rule_structure,
+                    message=f"Rule '{rule_name}' retrieved successfully",
+                )
             
             else:
-                return {
-                    "success": False,
-                    "error": f"Rule '{rule_name}' not found",
-                    "rule_name": rule_name
-                }
+                return vo.RuleDetailsResponseVO(
+                    success=False,
+                    rule_name=rule_name,
+                    error=utils.build_structured_error(
+                        f"Rule '{rule_name}' not found",
+                        "rules:fetch_rule",
+                    ),
+                )
                 
         except Exception as e:
-            return {
-                "success": False,
-                "error": f"Failed to fetch rule '{rule_name}': {e}",
-                "rule_name": rule_name
-            }
+            return vo.RuleDetailsResponseVO(
+                success=False,
+                rule_name=rule_name,
+                error=utils.build_structured_error(
+                    f"Failed to fetch rule '{rule_name}': {e}",
+                    "rules:fetch_rule",
+                ),
+            )
 
-    @mcp.tool()
-    def get_rules_summary(ctx: Context | None = None) -> List[Dict[str, Any]]:
+    @mcp.tool(annotations=utils.tool_annotations("Get Rules Summary",read_only=True))
+    def get_rules_summary(ctx: Context | None = None) -> vo.SimplifiedRuleListVO:
         """
         Tool-based version of `get_rules_summary` for improved compatibility and prevention of duplicate rule creation.
 
@@ -6906,17 +7495,36 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
             rule_response = rule.fetch_rules_api(ctx=ctx)
             
             if not rule_response:
-                return {"error": f"No rule found that matches the specified requirements."}
+                return vo.SimplifiedRuleListVO(
+                    success=False,
+                    error=utils.build_structured_error(
+                        "No rule found that matches the specified requirements.",
+                        "rules:get_rules_summary",
+                    ),
+                )
 
-            return rule_response
+            if isinstance(rule_response, str):
+                return vo.SimplifiedRuleListVO(
+                    success=False,
+                    error=utils.build_structured_error(
+                        rule_response,
+                        "rules:get_rules_summary",
+                    ),
+                )
+
+            return vo.SimplifiedRuleListVO(success=True, rules=rule_response)
 
         except Exception as e:
-            return {
-                "error": f"An error occurred while retrieving the rule with the specified details: {e}"
-            }
+            return vo.SimplifiedRuleListVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"An error occurred while retrieving the rule with the specified details: {e}",
+                    "rules:get_rules_summary",
+                ),
+            )
 
-    @mcp.tool()
-    def execute_rule(rule_name: str, from_date: str, to_date:str, rule_inputs: List[Dict[str, Any]], applications: List[Dict[str, Any]], is_application_data_provided_by_user: bool, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Execute Rule",read_only=False))
+    def execute_rule(rule_name: str, from_date: str, to_date:str, rule_inputs: List[Dict[str, Any]], applications: List[Dict[str, Any]], is_application_data_provided_by_user: bool, ctx: Context | None = None) -> vo.ExecuteRuleResponseVO:
         """
         RULE EXECUTION WORKFLOW:
 
@@ -7075,7 +7683,14 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
 
                 if application_id:
                     if not is_valid_uuid(application_id):
-                        return {"success": False, "error": f'The provided application ID: {application_id} is not valid. Please try again with a valid application ID.'}
+                        return vo.ExecuteRuleResponseVO(
+                            success=False,
+                            rule_name=rule_name,
+                            error=utils.build_structured_error(
+                                f"The provided application ID: {application_id} is not valid. Please try again with a valid application ID.",
+                                "rules:execute_rule",
+                            ),
+                        )
 
                     headers = wsutils.create_header(ctx)
                     params = {
@@ -7109,7 +7724,15 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
                     continue
 
                 if not is_valid and result:
-                    return {"success": False, "result":result}
+                    return vo.ExecuteRuleResponseVO(
+                        success=False,
+                        rule_name=rule_name,
+                        result={"validation": result},
+                        error=utils.build_structured_error(
+                            "Application validation failed for the provided configuration.",
+                            "rules:execute_rule",
+                        ),
+                    )
             
             # Prepare execution payload
             execution_payload = {
@@ -7128,22 +7751,27 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
                 header=headers
             )
 
-            return {
-                "success": True, 
-                "rule_name": rule_name, 
-                "execution_id": execution_result.get("id"), 
-                "message": f"Rule '{rule_name}' started executing."
-            }
+            return vo.ExecuteRuleResponseVO(
+                success=True,
+                rule_name=rule_name,
+                execution_id=execution_result.get("id"),
+                result=execution_result,
+                message=f"Rule '{rule_name}' started executing.",
+            )
 
         except Exception as e:
-            return {
-                "success": False, 
-                "rule_name": rule_name,
-                "message": f"Failed to execute rule '{rule_name}': {e}"
-            }
+            return vo.ExecuteRuleResponseVO(
+                success=False,
+                rule_name=rule_name,
+                message=f"Failed to execute rule '{rule_name}': {e}",
+                error=utils.build_structured_error(
+                    f"Failed to execute rule '{rule_name}': {e}",
+                    "rules:execute_rule",
+                ),
+            )
 
-    @mcp.tool()
-    def configure_rule_output_schema(ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Configure Rule Output Schema",read_only=True))
+    def configure_rule_output_schema(ctx: Context | None = None) -> vo.RuleOutputSchemaConfigResponseVO:
         """
         ===============================================================================
         EVIDENCE TOOL — STRICT INVOCATION POLICY
@@ -7311,14 +7939,15 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
             "(c) Standard + Extended — Stores evidence in both standard and extended formats"
         )
 
-        return {
-            "user_prompt": user_message,
-            "message": "Proceeding to user selection: Standard schema, Extended schema, or Standard + Extended.",
-            "next_step":"Generates a JS chart (Mermaid/D3) to visualize the rule's I/O fields and task structure. The chart must be shown in this chat immediately after user input. NOTE: No further processing should occur before this step."
-        }
+        return vo.RuleOutputSchemaConfigResponseVO(
+            success=True,
+            user_prompt=user_message,
+            message="Proceeding to user selection: Standard schema, Extended schema, or Standard + Extended.",
+            next_step="Generates a JS chart (Mermaid/D3) to visualize the rule's I/O fields and task structure. The chart must be shown in this chat immediately after user input. NOTE: No further processing should occur before this step.",
+        )
 
-    @mcp.tool()
-    def update_rule(rule_structure: Dict[str, Any],existing_rule_name: str,ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Update Rule",read_only=False))
+    def update_rule(rule_structure: Dict[str, Any],existing_rule_name: str,ctx: Context | None = None) -> vo.RuleCreateUpdateResponseVO:
         """
             UPDATE RULE — REQUIRED BEHAVIOR
             --------------------------------------------------------------------
@@ -7382,8 +8011,8 @@ if constants.ENABLE_RULE_CREATION_TASK_CHAIN_PROCESS:
         return create_rule.fn(rule_structure,True,ctx)
 
 else:
-    @mcp.tool()
-    def fetch_rules_suggestions(user_requirement: str, summary_string: str, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Fetch Rules Suggestions",read_only=True))
+    def fetch_rules_suggestions(user_requirement: str, summary_string: str, ctx: Context | None = None) -> vo.RulesSuggestionResponseVO:
         """
         Tool-based version of `fetch_rules_and_tasks_suggestions` for improved compatibility and prevention of duplicate rule creation.
 
@@ -7488,16 +8117,39 @@ else:
         try:
             rule_response = rule.fetch_rules_and_tasks_suggestions(query=summary_string, identifierType="rules", ctx=ctx)
             if not rule_response:
-                return {"error": f"No rule found that matches the specified requirements."}
-            return rule_response
+                return vo.RulesSuggestionResponseVO(
+                    success=False,
+                    message="No rule found that matches the specified requirements.",
+                    error=utils.build_structured_error(
+                        "No rule found that matches the specified requirements.",
+                        "rules:fetch_rules_suggestions",
+                    ),
+                )
+            if isinstance(rule_response, dict) and rule_response.get("error"):
+                return vo.RulesSuggestionResponseVO(
+                    success=False,
+                    error=utils.build_structured_error(
+                        rule_response.get("error"),
+                        "rules:fetch_rules_suggestions",
+                    ),
+                )
+            return vo.RulesSuggestionResponseVO(
+                success=True,
+                rules=rule_response,
+                message=f"Found {len(rule_response)} suggested rules for the provided requirement.",
+            )
         except Exception as e:
-            return {
-                "error": f"An error occurred while retrieving the rule with the specified details: {e}"
-            }
+            return vo.RulesSuggestionResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"An error occurred while retrieving the rule with the specified details: {e}",
+                    "rules:fetch_rules_suggestions",
+                ),
+            )
             
     # Alternative tool version for task details
-    @mcp.tool()
-    def get_task_details(task_name: str, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Get Task Details",read_only=True))
+    def get_task_details(task_name: str, ctx: Context | None = None) -> vo.TaskDetailsResponseVO:
         """
         Tool-based version of get_task_details for improved compatibility.
 
@@ -7552,15 +8204,56 @@ else:
             if rule.is_valid_key(tasks_resp, "items", array_check=True):
                 task = TaskVO.from_dict(tasks_resp["items"][0])
             if not task:
-                return {"error": f"Task '{task_name}' not found"}
+                return vo.TaskDetailsResponseVO(
+                    success=False,
+                    message=f"Task '{task_name}' not found",
+                    error=utils.build_structured_error(
+                        f"Task '{task_name}' not found",
+                        "rules:get_task_details",
+                    ),
+                )
             # Return same detailed information as resource
             readme_content = rule.decode_content(task.readmeData)
-            return {"name": task.name, "description": task.description, "tags": task.tags, "appTags": task.appTags, "readme_content": readme_content, "inputs": [{"name": inp.name, "description": inp.description, "dataType": inp.dataType, "required": inp.required, "has_template": bool(inp.templateFile), "format": inp.format if inp.templateFile else None} for inp in task.inputs], "outputs": [{"name": out.name, "description": out.description, "dataType": out.dataType} for out in task.outputs], "template_count": len([inp for inp in task.inputs if inp.templateFile]), "message": f"Use get_template_guidance('{task.name}', '<input_name>') for template details"}
+            return vo.TaskDetailsResponseVO(
+                success=True,
+                name=task.name,
+                description=task.description,
+                tags=task.tags,
+                appTags=task.appTags,
+                readme_content=readme_content,
+                inputs=[
+                    vo.TaskInputDetailsVO(
+                        name=inp.name,
+                        description=inp.description,
+                        dataType=inp.dataType,
+                        required=inp.required,
+                        has_template=bool(inp.templateFile),
+                        format=inp.format if inp.templateFile else None,
+                    )
+                    for inp in task.inputs
+                ],
+                outputs=[
+                    vo.TaskOutputDetailsVO(
+                        name=out.name,
+                        description=out.description,
+                        dataType=out.dataType,
+                    )
+                    for out in task.outputs
+                ],
+                template_count=len([inp for inp in task.inputs if inp.templateFile]),
+                message=f"Use get_template_guidance('{task.name}', '<input_name>') for template details",
+            )
         except Exception as e:
-            return {"error": f"An error occurred while fetching the task {task_name} details: {e}"}
+            return vo.TaskDetailsResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"An error occurred while fetching the task {task_name} details: {e}",
+                    "rules:get_task_details",
+                ),
+            )
         
-    @mcp.tool()
-    def create_rule(rule_structure: Dict[str, Any], ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Create Rule",read_only=False))
+    def create_rule(rule_structure: Dict[str, Any], ctx: Context | None = None) -> vo.RuleCreateUpdateResponseVO:
         """Create a rule with the provided structure.
 
         COMPLETE RULE CREATION PROCESS WITH PROGRESSIVE SAVING:
@@ -7729,7 +8422,14 @@ else:
             # Validate rule structure (preserve original validation)
             validation_result = rule.validate_rule_structure(rule_structure)
             if not validation_result["valid"]:
-                return {"success": False, "error": "Invalid rule structure", "validation_errors": validation_result["errors"]}
+                return vo.RuleCreateUpdateResponseVO(
+                    success=False,
+                    validation_errors=validation_result["errors"],
+                    error=utils.build_structured_error(
+                        "Invalid rule structure",
+                        "rules:create_rule",
+                    ),
+                )
 
             # Additional validation for task aliases in I/O mappings (preserved from original)
             tasks_section = rule_structure.get("spec", {}).get("tasks", [])
@@ -7752,19 +8452,25 @@ else:
                     if not left_side.startswith("*."):
                         alias_part = left_side.split(".")[0]
                         if alias_part not in valid_aliases and alias_part != "*":
-                            return {
-                                "success": False,
-                                "error": f"Unknown task alias '{alias_part}' in I/O mapping: {mapping}. Valid aliases: {list(valid_aliases)}"
-                            }
+                            return vo.RuleCreateUpdateResponseVO(
+                                success=False,
+                                error=utils.build_structured_error(
+                                    f"Unknown task alias '{alias_part}' in I/O mapping: {mapping}. Valid aliases: {list(valid_aliases)}",
+                                    "rules:create_rule",
+                                ),
+                            )
                     
                     # Check right side for task alias  
                     if not right_side.startswith("*."):
                         alias_part = right_side.split(".")[0]
                         if alias_part not in valid_aliases and alias_part != "*":
-                            return {
-                                "success": False,
-                                "error": f"Unknown task alias '{alias_part}' in I/O mapping: {mapping}. Valid aliases: {list(valid_aliases)}"
-                            }
+                            return vo.RuleCreateUpdateResponseVO(
+                                success=False,
+                                error=utils.build_structured_error(
+                                    f"Unknown task alias '{alias_part}' in I/O mapping: {mapping}. Valid aliases: {list(valid_aliases)}",
+                                    "rules:create_rule",
+                                ),
+                            )
 
                     # Validate right side (source) output exists in task
                     if not right_side.startswith("*."):
@@ -7786,11 +8492,12 @@ else:
                                     # Get task details to validate output exists
                                     task_name = source_task.get("name")
                                     task_details= get_task_details.fn(task_name, ctx)
-                                    if task_details.get("error"):
-                                        io_mapping_errors.append(f"Could not validate task '{task_name}': {task_details['error']}")
+                                    task_details_payload = task_details.model_dump() if isinstance(task_details, BaseModel) else task_details
+                                    if task_details_payload.get("error"):
+                                        io_mapping_errors.append(f"Could not validate task '{task_name}': {task_details_payload['error']}")
                                     else:
                                         # Check if the output exists in task definition
-                                        task_outputs = task_details.get("outputs", [])
+                                        task_outputs = task_details_payload.get("outputs", [])
                                         valid_output_names = [out["name"] for out in task_outputs]
                                         
                                         if output_name not in valid_output_names:
@@ -7801,12 +8508,15 @@ else:
 
             # Return validation errors if any I/O mapping issues found
             if io_mapping_errors:
-                return {
-                    "success": False,
-                    "error": "I/O mapping validation failed",
-                    "validation_errors": io_mapping_errors,
-                    "message": "Some I/O mappings reference outputs that don't exist in the specified tasks"
-                }    
+                return vo.RuleCreateUpdateResponseVO(
+                    success=False,
+                    validation_errors=io_mapping_errors,
+                    message="Some I/O mappings reference outputs that don't exist in the specified tasks",
+                    error=utils.build_structured_error(
+                        "I/O mapping validation failed",
+                        "rules:create_rule",
+                    ),
+                )
 
             # NEW: AUTOMATIC STATUS DETECTION based on rule content
             spec = rule_structure.get("spec", {})
@@ -7816,11 +8526,12 @@ else:
             primary_app_type_array = meta.get("labels", {}).get("appType", [])
             primary_app_type = primary_app_type_array[0] if primary_app_type_array else None
             applications_response = fetch_applications.fn(ctx)
+            applications_response_payload = applications_response.model_dump() if isinstance(applications_response, BaseModel) else applications_response
             application_class_name = None
 
             # Find matching application class name for primary app type
-            if applications_response and applications_response.get("success") and primary_app_type:
-                for app in applications_response.get("applications"):
+            if applications_response_payload and applications_response_payload.get("success") and primary_app_type:
+                for app in applications_response_payload.get("applications"):
                     app_type = app.get("app_type")
                     # Check if any app type from primary_app_type matches any app type from the application
                     if app_type == primary_app_type:
@@ -7930,7 +8641,8 @@ else:
 
             # Check if rule already exists (for updates vs creation)
             existing_rule = fetch_rule.fn(rule_structure["meta"]["name"], ctx)
-            is_update = existing_rule["success"]
+            existing_rule_payload = existing_rule.model_dump() if isinstance(existing_rule, BaseModel) else existing_rule
+            is_update = existing_rule_payload["success"]
 
             # Generate YAML preview for user confirmation (preserved from original)
             yaml_preview = rule.generate_yaml_preview(rule_structure)
@@ -7960,8 +8672,9 @@ else:
             #Add MCP tag to the rule with proper error handling
             try:
                 tag_result = add_rule_tag(rule_name, ctx)
-                if not tag_result.get("success", False):
-                    tag_message = tag_result.get("message", "Unknown error occurred")
+                tag_result_payload = tag_result.model_dump() if isinstance(tag_result, BaseModel) else tag_result
+                if not tag_result_payload.get("success", False):
+                    tag_message = tag_result_payload.get("message", "Unknown error occurred")
                     tag_status = {
                         "tagged": False,
                         "message": f"Rule created successfully but MCP tag addition failed: {tag_message}"
@@ -7969,7 +8682,7 @@ else:
                 else:
                     tag_status = {
                         "tagged": True,
-                        "message": tag_result.get("message", "MCP tag added successfully")
+                        "message": tag_result_payload.get("message", "MCP tag added successfully")
                     }
             except Exception as e:
                 tag_status = {
@@ -7977,34 +8690,46 @@ else:
                     "message": f"Rule created successfully but MCP tag addition encountered an exception: {e}"
                 }
 
-            return {
-                "success": True,
-                "rule_id": result["rule_id"],
-                "rule_name": rule_name,
-                "is_update": is_update,
-                "detected_status": auto_status,
-                "creation_phase": creation_phase,
-                "progress_percentage": progress_percentage,
-                "completion_analysis": completion_analysis,
-                "message": f"Rule {'updated' if is_update else 'created'} successfully with meaningful task aliases - Status: {auto_status} ({progress_percentage}% complete)",
-                "rule_structure": rule_structure,
-                "yaml_preview": yaml_preview,
-                "timestamp": result.get("timestamp"),
-                "status": result.get("status", auto_status),
-                "design_notes_info": design_notes_result,
-                "readme_info": readme_info,
-                "tag_status": tag_status,
-                "ui_url" : ui_url,
-                "next_step": determine_next_action(creation_phase, completion_analysis)
-            }
+            return vo.RuleCreateUpdateResponseVO(
+                success=True,
+                rule_id=result["rule_id"],
+                rule_name=rule_name,
+                is_update=is_update,
+                detected_status=auto_status,
+                creation_phase=creation_phase,
+                progress_percentage=progress_percentage,
+                completion_analysis=completion_analysis,
+                message=f"Rule {'updated' if is_update else 'created'} successfully with meaningful task aliases - Status: {auto_status} ({progress_percentage}% complete)",
+                rule_structure=rule_structure,
+                yaml_preview=yaml_preview,
+                timestamp=result.get("timestamp"),
+                status=result.get("status", auto_status),
+                design_notes_info=design_notes_result,
+                readme_info=readme_info,
+                tag_status=tag_status,
+                ui_url=ui_url,
+                next_step=determine_next_action(creation_phase, completion_analysis),
+            )
             
         except exception.CCowExceptionVO as e:
-            return {"success": False, "error": f"Failed to create rule: {e.to_dict()}"}
+            return vo.RuleCreateUpdateResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Failed to create rule: {e.to_dict()}",
+                    "rules:create_rule",
+                ),
+            )
         except Exception as e:
-            return {"success": False, "error": f"Failed to create rule: {e}"}
+            return vo.RuleCreateUpdateResponseVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"Failed to create rule: {e}",
+                    "rules:create_rule",
+                ),
+            )
         
-    @mcp.tool()
-    def fetch_rule(rule_name: str, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Fetch Rule",read_only=True))
+    def fetch_rule(rule_name: str, ctx: Context | None = None) -> vo.RuleDetailsResponseVO:
         """
         Fetch rule details by rule name.
 
@@ -8034,29 +8759,35 @@ else:
                     rule_structure['apiVersion']="rule.policycow.live/v1alpha1"
 
 
-                return {
-                    "success": True,
-                    "rule_name": rule_name,
-                    "rule_structure": rule_structure,  # Complete rule as dictionary
-                    "message": f"Rule '{rule_name}' retrieved successfully"
-                }
+                return vo.RuleDetailsResponseVO(
+                    success=True,
+                    rule_name=rule_name,
+                    rule_structure=rule_structure,
+                    message=f"Rule '{rule_name}' retrieved successfully",
+                )
             
             else:
-                return {
-                    "success": False,
-                    "error": f"Rule '{rule_name}' not found",
-                    "rule_name": rule_name
-                }
+                return vo.RuleDetailsResponseVO(
+                    success=False,
+                    rule_name=rule_name,
+                    error=utils.build_structured_error(
+                        f"Rule '{rule_name}' not found",
+                        "rules:fetch_rule",
+                    ),
+                )
                 
         except Exception as e:
-            return {
-                "success": False,
-                "error": f"Failed to fetch rule '{rule_name}': {e}",
-                "rule_name": rule_name
-            }
+            return vo.RuleDetailsResponseVO(
+                success=False,
+                rule_name=rule_name,
+                error=utils.build_structured_error(
+                    f"Failed to fetch rule '{rule_name}': {e}",
+                    "rules:fetch_rule",
+                ),
+            )
             
-    @mcp.tool()
-    def get_rules_summary(ctx: Context | None = None) -> List[Dict[str, Any]]:
+    @mcp.tool(annotations=utils.tool_annotations("Get Rules Summary",read_only=True))
+    def get_rules_summary(ctx: Context | None = None) -> vo.SimplifiedRuleListVO:
         """
         Tool-based version of `get_rules_summary` for improved compatibility and prevention of duplicate rule creation.
 
@@ -8150,17 +8881,36 @@ else:
             rule_response = rule.fetch_rules_api(ctx=ctx)
             
             if not rule_response:
-                return {"error": f"No rule found that matches the specified requirements."}
+                return vo.SimplifiedRuleListVO(
+                    success=False,
+                    error=utils.build_structured_error(
+                        "No rule found that matches the specified requirements.",
+                        "rules:get_rules_summary",
+                    ),
+                )
 
-            return rule_response
+            if isinstance(rule_response, str):
+                return vo.SimplifiedRuleListVO(
+                    success=False,
+                    error=utils.build_structured_error(
+                        rule_response,
+                        "rules:get_rules_summary",
+                    ),
+                )
+
+            return vo.SimplifiedRuleListVO(success=True, rules=rule_response)
 
         except Exception as e:
-            return {
-                "error": f"An error occurred while retrieving the rule with the specified details: {e}"
-            }
+            return vo.SimplifiedRuleListVO(
+                success=False,
+                error=utils.build_structured_error(
+                    f"An error occurred while retrieving the rule with the specified details: {e}",
+                    "rules:get_rules_summary",
+                ),
+            )
             
-    @mcp.tool()
-    def execute_rule(rule_name: str, from_date: str, to_date:str, rule_inputs: List[Dict[str, Any]], applications: List[Dict[str, Any]], is_application_data_provided_by_user: bool, ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Execute Rule",read_only=False))
+    def execute_rule(rule_name: str, from_date: str, to_date:str, rule_inputs: List[Dict[str, Any]], applications: List[Dict[str, Any]], is_application_data_provided_by_user: bool, ctx: Context | None = None) -> vo.ExecuteRuleResponseVO:
         """
         RULE EXECUTION WORKFLOW:
 
@@ -8310,7 +9060,14 @@ else:
 
                 if application_id:
                     if not is_valid_uuid(application_id):
-                        return {"success": False, "error": f'The provided application ID: {application_id} is not valid. Please try again with a valid application ID.'}
+                        return vo.ExecuteRuleResponseVO(
+                            success=False,
+                            rule_name=rule_name,
+                            error=utils.build_structured_error(
+                                f"The provided application ID: {application_id} is not valid. Please try again with a valid application ID.",
+                                "rules:execute_rule",
+                            ),
+                        )
 
                     headers = wsutils.create_header(ctx)
                     params = {
@@ -8344,7 +9101,15 @@ else:
                     continue
 
                 if not is_valid and result:
-                    return {"success": False, "result":result}
+                    return vo.ExecuteRuleResponseVO(
+                        success=False,
+                        rule_name=rule_name,
+                        result={"validation": result},
+                        error=utils.build_structured_error(
+                            "Application validation failed for the provided configuration.",
+                            "rules:execute_rule",
+                        ),
+                    )
             
             # Prepare execution payload
             execution_payload = {
@@ -8363,22 +9128,27 @@ else:
                 header=headers
             )
 
-            return {
-                "success": True, 
-                "rule_name": rule_name, 
-                "execution_id": execution_result.get("id"), 
-                "message": f"Rule '{rule_name}' started executing."
-            }
+            return vo.ExecuteRuleResponseVO(
+                success=True,
+                rule_name=rule_name,
+                execution_id=execution_result.get("id"),
+                result=execution_result,
+                message=f"Rule '{rule_name}' started executing.",
+            )
 
         except Exception as e:
-            return {
-                "success": False, 
-                "rule_name": rule_name,
-                "message": f"Failed to execute rule '{rule_name}': {e}"
-            }
+            return vo.ExecuteRuleResponseVO(
+                success=False,
+                rule_name=rule_name,
+                message=f"Failed to execute rule '{rule_name}': {e}",
+                error=utils.build_structured_error(
+                    f"Failed to execute rule '{rule_name}': {e}",
+                    "rules:execute_rule",
+                ),
+            )
             
-    @mcp.tool()
-    def configure_rule_output_schema(ctx: Context | None = None) -> Dict[str, Any]:
+    @mcp.tool(annotations=utils.tool_annotations("Configure Rule Output Schema",read_only=True))
+    def configure_rule_output_schema(ctx: Context | None = None) -> vo.RuleOutputSchemaConfigResponseVO:
         """
         PREREQUISITE — MUST RUN FIRST (NON-SKIPPABLE)
         This tool is a hard prerequisite and MUST be executed successfully before the `prepare_input_collection_overview()` tool (and any downstream rule-creation or evaluation steps). 
@@ -8493,8 +9263,9 @@ else:
             "(c) Standard + Extended — Stores evidence in both standard and extended formats"
         )
 
-        return {
-            "user_prompt": user_message,
-            "message": "Proceeding to user selection: Standard schema, Extended schema, or Standard + Extended.",
-            "next_step":"Generates a JS chart (Mermaid/D3) to visualize the rule's I/O fields and task structure. The chart must be shown in this chat immediately after user input. NOTE: No further processing should occur before this step."
-        }
+        return vo.RuleOutputSchemaConfigResponseVO(
+            success=True,
+            user_prompt=user_message,
+            message="Proceeding to user selection: Standard schema, Extended schema, or Standard + Extended.",
+            next_step="Generates a JS chart (Mermaid/D3) to visualize the rule's I/O fields and task structure. The chart must be shown in this chat immediately after user input. NOTE: No further processing should occur before this step.",
+        )

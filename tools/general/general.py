@@ -6,6 +6,7 @@ from utils.debug import logger
 import os
 from utils import utils
 from constants import constants
+from mcptypes import general_tool_types as vo
 import re
 import time
 from typing import Any
@@ -16,7 +17,7 @@ mcp_tools_to_be_included = os.getenv("MCP_TOOLS_TO_BE_INCLUDED", "").lower().str
 
 
 @mcp.tool(annotations=utils.tool_annotations("Read File",read_only=True))
-def read_file(uri: str, max_chars: int = 8000) -> dict:
+def read_file(uri: str, max_chars: int = 8000) -> vo.FileReadResultVO:
     """
     Read content from a local file given a file:// URI or file path.
     
@@ -37,21 +38,21 @@ def read_file(uri: str, max_chars: int = 8000) -> dict:
         
         # Security checks
         if not file_path.exists():
-            return {"error": f"File not found: {file_path}", "uri": uri}
+            return vo.FileReadResultVO(error=utils.build_structured_error(f"File not found: {file_path}", "read_file"), uri=uri)
         
         if not file_path.is_file():
-            return {"error": f"Path is not a file: {file_path}", "uri": uri}
+            return vo.FileReadResultVO(error=utils.build_structured_error(f"Path is not a file: {file_path}", "read_file"), uri=uri)
         
         if ".." in str(file_path):
-            return {"error": "Path traversal not allowed", "uri": uri}
+            return vo.FileReadResultVO(error=utils.build_structured_error("Path traversal not allowed", "read_file"), uri=uri)
         
         # File size check (10MB limit)
         MAX_FILE_SIZE = 10 * 1024 * 1024
         if file_path.stat().st_size > MAX_FILE_SIZE:
-            return {
-                "error": f"File too large: {file_path.stat().st_size} bytes (max: {MAX_FILE_SIZE})",
-                "uri": uri
-            }
+            return vo.FileReadResultVO(
+                error=utils.build_structured_error(f"File too large: {file_path.stat().st_size} bytes (max: {MAX_FILE_SIZE})", "read_file"),
+                uri=uri,
+            )
         
         # Read file content
         try:
@@ -66,28 +67,27 @@ def read_file(uri: str, max_chars: int = 8000) -> dict:
         
         # Check if content is too large
         if len(content) > max_chars:
-            return {
-                "error": f"File content too large to display: {len(content):,} characters (max: {max_chars:,})",
-                "uri": uri,
-                "file_name": file_path.name,
-                "file_size": len(content)
-            }
+            return vo.FileReadResultVO(
+                error=utils.build_structured_error(f"File content too large to display: {len(content):,} characters (max: {max_chars:,})", "read_file"),
+                uri=uri,
+                file_name=file_path.name,
+                file_size=len(content),
+            )
         
-        # Return full content if within limits
-        return {
-            "content": content,
-            "uri": uri,
-            "mime_type": mime_type,
-            "file_size": file_path.stat().st_size,
-            "file_name": file_path.name,
-            "character_count": len(content)
-        }
+        return vo.FileReadResultVO(
+            content=content,
+            uri=uri,
+            mime_type=mime_type,
+            file_size=file_path.stat().st_size,
+            file_name=file_path.name,
+            character_count=len(content),
+        )
         
     except Exception as e:
-        return {"error": f"Failed to read file: {str(e)}", "uri": uri}
+        return vo.FileReadResultVO(error=utils.build_structured_error(f"Failed to read file: {str(e)}", "read_file"), uri=uri)
 
 @mcp.tool(annotations=utils.tool_annotations("Read Resource",read_only=True))
-def read_resource(uri: str, max_chars: int = 8000) -> dict:
+def read_resource(uri: str, max_chars: int = 8000) -> vo.FileReadResultVO:
     """
     Read content from a resource URI (primarily for local files).
     
@@ -98,11 +98,11 @@ def read_resource(uri: str, max_chars: int = 8000) -> dict:
     Returns:
         Dictionary containing resource content or error message
     """
-    return read_file(uri, max_chars)
+    return read_file.fn(uri, max_chars)
 
 if mcp_tools_to_be_included:
-    @mcp.tool()
-    async def create_downloadable_file(filename: str, content: str, ctx: Context | None = None) -> dict:
+    @mcp.tool(annotations=utils.tool_annotations("Create Downloadable File",read_only=False))
+    async def create_downloadable_file(filename: str, content: str, ctx: Context | None = None) -> vo.DownloadableFileVO:
         """
         Use this tool whenever the user asks to “download as file” or “save as file.”
 
@@ -155,14 +155,12 @@ if mcp_tools_to_be_included:
 
             if isinstance(output, str) and utils.isFileHash(output):
                 file_url = f'http://cowfile/hash/{output}/{updated_file_name}'
-                return {
-                    "filename": filename,
-                    "url": file_url
-                }
+                return vo.DownloadableFileVO(filename=filename, url=file_url)
             
-            return { "error": "Unable to download the file"}           
+            error = utils.build_structured_error(output, "create_downloadable_file")
+            return vo.DownloadableFileVO(error=error or utils.build_structured_error("Unable to download the file", "create_downloadable_file"))          
 
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.error("create_downloadable_file: {}\n".format(e))
-            return {"error": "Facing internal error"}
+            return vo.DownloadableFileVO(error=utils.build_structured_error(f"Unexpected error: {e}", "create_downloadable_file"))

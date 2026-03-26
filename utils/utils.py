@@ -10,7 +10,7 @@ from mcpconfig.config import get_cc_headers
 
 # from mcpconfig import get_access_token
 from mcp.server.auth.middleware.auth_context import get_access_token
-from mcptypes.error_type import ErrorVO,ErrorResponseVO,ErrorWorkflowVO
+from mcptypes.error_type import ErrorVO,ErrorResponseVO,ErrorWorkflowVO, StructuredError
 import re
 
 
@@ -63,6 +63,10 @@ async def make_API_call_to_CCow_and_get_response(uriSuffix: str,method: str,requ
                     return ErrorWorkflowVO(Message=error.get("Message"),ErrorDetails=error.get("ErrorDetails")).model_dump()
                 return ErrorVO(error=f"Unexpected response status: {response.status_code}").model_dump()
             if response.content:
+                logger.info(
+                            "Response make_API_call_to_CCow_and_get_response: %s",
+                            json.dumps(response.json(), indent=2)
+                        )
                 return response.json()
             else:
                 return {}
@@ -97,6 +101,10 @@ async def make_API_call_to_CCow(request_body: dict | str,uriSuffix: str, type: s
                     or ( "description" in error  and "No recent run for ccf plans" in error["description"])):
                     return ErrorVO(error="NO_DATA_FOUND").model_dump()
                 return ErrorVO(error=f"Unexpected response status: {response.status_code}").model_dump()
+            logger.info(
+                "Response make_API_call_to_CCow: %s",
+                json.dumps(response.json(), indent=2)
+            )
             return response.json()
         except httpx.TimeoutException:
             logger.error(f"make_API_call_to_CCow error: Request timed out after 60 seconds for uriSuffix: {uriSuffix}")
@@ -118,6 +126,10 @@ async def make_GET_API_call_to_CCow(uriSuffix: str,ctx: Context | None = None) -
             if response.status_code < 200 or response.status_code > 299:
                 logger.error("make_GET_API_call_to_CCow unexpected status code: error: {}\n".format(response.json()))
                 return ErrorVO(error=f"Unexpected response status: {response.status_code}").model_dump()
+            logger.info(
+                    "Response make_GET_API_call_to_CCow: %s",
+                    json.dumps(response.json(), indent=2)
+                )
             return response.json()
         except httpx.TimeoutException:
             logger.error(f"make_GET_API_call_to_CCow error: Request timed out after 60 seconds for uriSuffix: {uriSuffix}")
@@ -246,6 +258,34 @@ def handle_error_response(resp, tool_name: str) -> dict | None:
             return {"success": False, "error": resp}
 
     return None
+
+
+def build_structured_error(resp, tool_name: str) -> StructuredError | None:
+    handled = handle_error_response(resp, tool_name)
+    if not handled:
+        return None
+
+    payload = handled.get("error")
+
+    if isinstance(payload, dict):
+        if "Message" in payload and "Description" in payload:
+            return ErrorResponseVO(
+                Message=payload.get("Message", ""),
+                Description=payload.get("Description", ""),
+            )
+
+        if "Message" in payload and "ErrorDetails" in payload:
+            return ErrorWorkflowVO(
+                Message=payload.get("Message", ""),
+                ErrorDetails=payload.get("ErrorDetails"),
+            )
+
+        if "error" in payload:
+            return ErrorVO(error=payload.get("error", ""))
+
+        return ErrorVO(error=str(payload))
+
+    return ErrorVO(error=str(payload))
 
 
 def require_fields(data: dict, fields: list[str]) -> dict | None:

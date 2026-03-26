@@ -23,11 +23,12 @@ async def list_all_assessment_categories(ctx: Context | None = None) -> vo.Categ
     try:
         logger.info("get_all_assessment_categories: \n")
 
-        output=await utils.make_GET_API_call_to_CCow(constants.URL_ASSESSMENT_CATEGORIES, ctx)
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_ASSESSMENT_CATEGORIES, "GET", ctx=ctx)
         
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assessments:list_all_assessment_categories")
+        if error:
             logger.error("list_all_assessment_categories error: {}\n".format(output))
-            return vo.CategoryListVO(error="Facing internal error")
+            return vo.CategoryListVO(error=error)
         
         # if isinstance(output, str):
         #     return output
@@ -41,7 +42,7 @@ async def list_all_assessment_categories(ctx: Context | None = None) -> vo.Categ
         return vo.CategoryListVO(categories=category_list)
     except Exception as e:
         logger.error("list_all_assessment_categories error: {}\n".format(e))
-        return vo.CategoryListVO(error="Facing internal error")
+        return vo.CategoryListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:list_all_assessment_categories"))
 
 @mcp.tool(annotations=utils.tool_annotations("List Assessments",read_only=True))
 async def list_assessments(categoryId: str = "", categoryName: str = "", assessmentName: str = "", ctx: Context | None = None) -> vo.AssessmentListVO:
@@ -63,10 +64,16 @@ async def list_assessments(categoryId: str = "", categoryName: str = "", assessm
 
         logger.debug("payload: {} {}\n".format(categoryId, categoryName))
 
-        output=await utils.make_GET_API_call_to_CCow(constants.URL_PLANS+"?fields=basic&category_id="+categoryId+"&category_name_contains="+categoryName+"&name_contains="+assessmentName, ctx)
-        if isinstance(output, str) or  "error" in output:
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLANS, "GET", {
+            "fields": "basic",
+            "category_id": categoryId,
+            "category_name_contains": categoryName,
+            "name_contains": assessmentName,
+        }, ctx=ctx)
+        error = utils.build_structured_error(output, "assessments:list_assessments")
+        if error:
             logger.error("list_assessments error: {}\n".format(output))
-            return vo.AssessmentListVO(error="Facing internal error")
+            return vo.AssessmentListVO(error=error)
                     
         assessments: List[vo.AssessmentVO]=[]
         for item in output["items"]:
@@ -78,4 +85,4 @@ async def list_assessments(categoryId: str = "", categoryName: str = "", assessm
         return vo.AssessmentListVO(assessments=assessments)
     except Exception as e:
         logger.error("list_assessments error: {}\n".format(e))
-        return vo.AssessmentListVO(error="Facing internal error")
+        return vo.AssessmentListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assessments:list_assessments"))

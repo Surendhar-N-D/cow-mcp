@@ -1,7 +1,8 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Any, List, Optional
 from enum import Enum
-    
+from mcptypes.error_type import StructuredError
+
 
 class WorkflowEventCategoryItemVO(BaseModel):
     type: Optional[str] = ""
@@ -12,7 +13,11 @@ class WorkflowEventCategoryItemVO(BaseModel):
 
 class WorkflowEventCategoryListVO(BaseModel):
     eventCategories: Optional[List[WorkflowEventCategoryItemVO]] = None
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
 
 
 class WorkflowActivityCategoryItemVO(BaseModel):
@@ -23,7 +28,11 @@ class WorkflowActivityCategoryItemVO(BaseModel):
 
 class WorkflowActivityCategoryListVO(BaseModel):
     activityCategories: Optional[List[WorkflowActivityCategoryItemVO]] = None
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
 
     
 class WorkflowConditionCategoryItemVO(BaseModel):
@@ -34,7 +43,11 @@ class WorkflowConditionCategoryItemVO(BaseModel):
 
 class WorkflowConditionCategoryListVO(BaseModel):
     conditionCategories: Optional[List[WorkflowConditionCategoryItemVO]] = None
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
 
 class WorkflowInputsVO(BaseModel):
     name: Optional[str] = ""
@@ -81,7 +94,20 @@ class WorkflowEventVO(BaseModel):
 class WorkflowEventListVO(BaseModel):
     systemEvents: Optional[List[WorkflowEventVO]] = None
     customEvents: Optional[List[WorkflowEventVO]] = None
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
+
+
+class WorkflowActivityTypeListVO(BaseModel):
+    activityTypes: Optional[List[str]] = None
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
 
 
 class WorkflowActivityVO(BaseModel):
@@ -99,7 +125,11 @@ class WorkflowActivityVO(BaseModel):
 
 class WorkflowActivityListVO(BaseModel):
     activities: Optional[List[WorkflowActivityVO]] = None
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
 
 class WorkflowConditionVO(BaseModel):
     id: Optional[str] = ""
@@ -116,7 +146,11 @@ class WorkflowConditionVO(BaseModel):
 
 class WorkflowConditionListVO(BaseModel):
     conditions: Optional[List[WorkflowConditionVO]] = None
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
 
 class WorkflowTaskInputsVO(BaseModel):
     name: Optional[str] = ""
@@ -148,7 +182,11 @@ class WorkflowTaskVO(BaseModel):
 
 class WorkflowTaskListVO(BaseModel):
     tasks: Optional[List[WorkflowTaskVO]] = None
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
 
 class WorkflowRuleInputsVO(BaseModel):
     name: Optional[str] = ""
@@ -182,7 +220,11 @@ class WorkflowRuleVO(BaseModel):
 
 class WorkflowRuleListVO(BaseModel):
     rules: Optional[List[WorkflowRuleVO]] = None
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
 
 class WorkflowPredefinedVariableVO(BaseModel):
     id: Optional[str] = ""
@@ -192,7 +234,11 @@ class WorkflowPredefinedVariableVO(BaseModel):
 
 class WorkflowPredefinedVariableListVO(BaseModel):
     items: Optional[List[WorkflowPredefinedVariableVO]] = None
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
 
 class EventPayloadTypeEnum(str, Enum):
     Text = "Text"
@@ -225,9 +271,90 @@ class WorkflowCustomEventCreateVO(BaseModel):
 class TaskReadmeResponseVO(BaseModel):
     readmeText: Optional[str] = ""
     taskName: Optional[str] = ""
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
 
 class RuleReadmeResponseVO(BaseModel):
     readmeText: Optional[str] = ""
     ruleName: Optional[str] = ""
-    error: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
+
+
+class WorkflowResourceDataVO(BaseModel):
+    items: Optional[List[Any]] = None
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
+
+
+class WorkflowCreateResponseVO(BaseModel):
+    workflowId: Optional[str] = ""
+    uiUrl: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
+
+
+class WorkflowListResponseVO(BaseModel):
+    items: Optional[List[Any]] = None
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
+
+
+class WorkflowItemResponseVO(BaseModel):
+    item: Optional[Any] = None
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
+
+
+class WorkflowMutationResponseVO(BaseModel):
+    success: Optional[bool] = False
+    message: Optional[Any] = None
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
+
+
+class WorkflowCustomEventResponseVO(BaseModel):
+    id: Optional[str] = ""
+    preview: Optional[Any] = None
+    next_step: Optional[str] = ""
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }
+
+
+class WorkflowTriggerResponseVO(BaseModel):
+    message: Optional[str] = ""
+    event: Optional[str] = ""
+    requiredInputs: Optional[List[str]] = None
+    provided: Optional[dict[str, Any]] = None
+    missing: Optional[List[str]] = None
+    next_step: Optional[str] = ""
+    result: Optional[Any] = None
+    error: Optional[StructuredError] = None
+
+    model_config = {
+        "extra": "ignore"
+    }

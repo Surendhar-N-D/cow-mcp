@@ -33,12 +33,13 @@ async def fetch_unique_node_data_and_schema(question: str, ctx: Context | None =
         logger.info("\nget_unique_node_data_and_schema: \n")
         logger.debug("question: {}".format(question))
 
-        output=await utils.make_API_call_to_CCow({"user_question":question},constants.URL_RETRIEVE_UNIQUE_NODE_DATA_AND_SCHEMA, ctx=ctx)
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_RETRIEVE_UNIQUE_NODE_DATA_AND_SCHEMA, "POST", {"user_question":question}, ctx=ctx)
         logger.debug("output: {}\n".format(output))
         
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "fetch_unique_node_data_and_schema")
+        if error:
             logger.error("fetch_unique_node_data_and_schema error: {}\n".format(output))
-            return UniqueNodeDataVO(error="Facing internal error")
+            return UniqueNodeDataVO(error=error)
         
         uniqueNodeDataVO = UniqueNodeDataVO(
             node_names=output["node_names"],
@@ -49,7 +50,7 @@ async def fetch_unique_node_data_and_schema(question: str, ctx: Context | None =
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_unique_node_data_and_schema error: {}\n".format(e))
-        return  UniqueNodeDataVO(error='Facing internal server error')
+        return UniqueNodeDataVO(error=utils.build_structured_error(f"Unexpected error: {e}", "fetch_unique_node_data_and_schema"))
 
 
 
@@ -97,17 +98,18 @@ async def execute_cypher_query(query: str, ctx: Context | None = None) -> Cypher
         logger.info("\nexecute_cypher_query: \n")
         logger.debug("query: {}".format(query))
 
-        output=await utils.make_API_call_to_CCow({
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_EXECUTE_CYPHER_QUERY, "POST", {
             "query": query,
-        },constants.URL_EXECUTE_CYPHER_QUERY, ctx=ctx)
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(output))
         
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "execute_cypher_query")
+        if error:
             logger.error("\nexecute_cypher_query error: {}\n".format(output))
-            return CypherQueryVO(error="Facing internal error")
+            return CypherQueryVO(error=error)
 
         return CypherQueryVO(result=output.get('result'))
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("\nexecute_cypher_query error: {}\n".format(e))
-        return CypherQueryVO(error="Facing internal error")
+        return CypherQueryVO(error=utils.build_structured_error(f"Unexpected error: {e}", "execute_cypher_query"))

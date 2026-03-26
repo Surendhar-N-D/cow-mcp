@@ -16,11 +16,11 @@ import yaml
 from mcptypes import assessment_config_tool_types as assessment_vo
 from mcptypes import workflow_tools_type as workflow_vo
 from mcptypes.graph_tool_types import UniqueNodeDataVO
-from mcptypes.assistant_tool_types import ControlSourceSummaryResponseVO, ControlSourceSummaryVO
+from mcptypes import assistant_tool_types as vo
 from fastmcp import Context
 
 @mcp.tool(annotations=utils.tool_annotations("Create Assessment",read_only=False))
-async def create_assessment(yaml_content: str, ctx: Context | None = None) -> dict:
+async def create_assessment(yaml_content: str, ctx: Context | None = None) -> vo.AssessmentCreateResponseVO:
     """
     Create a new assessment from YAML definition.
     
@@ -38,14 +38,14 @@ async def create_assessment(yaml_content: str, ctx: Context | None = None) -> di
         
         if not yaml_content or not yaml_content.strip():
             logger.error("create_assessment error: YAML content is empty\n")
-            return {"success": False, "error": "YAML content is empty"}
+            return vo.AssessmentCreateResponseVO(success=False, error=utils.build_structured_error("YAML content is empty", "create_assessment"))
 
         try:
             parsed = yaml.safe_load(yaml_content)
             logger.debug("create_assessment yaml_content: {}\n".format(yaml_content))
         except Exception as ye:
             logger.error(f"create_assessment error: Invalid YAML: {ye}\n")
-            return {"success": False, "error": f"Invalid YAML: {ye}"}
+            return vo.AssessmentCreateResponseVO(success=False, error=utils.build_structured_error(f"Invalid YAML: {ye}", "create_assessment"))
 
         # Extract name
         name = None
@@ -56,7 +56,7 @@ async def create_assessment(yaml_content: str, ctx: Context | None = None) -> di
 
         if not name or not str(name).strip():
             logger.error("create_assessment error: Assessment name not found in metadata.name\n")
-            return {"success": False, "error": "Assessment name not found in metadata.name"}
+            return vo.AssessmentCreateResponseVO(success=False, error=utils.build_structured_error("Assessment name not found in metadata.name", "create_assessment"))
 
         # Extract categoryName from metadata
         category_name = None
@@ -67,23 +67,20 @@ async def create_assessment(yaml_content: str, ctx: Context | None = None) -> di
 
         if not category_name or not isinstance(category_name, str) or not category_name.strip():
             logger.error("create_assessment error: categoryName not found in metadata.categoryName\n")
-            return {"success": False, "error": "categoryName is required in metadata.categoryName"}
+            return vo.AssessmentCreateResponseVO(success=False, error=utils.build_structured_error("categoryName is required in metadata.categoryName", "create_assessment"))
 
         category_name = category_name.strip()
         category_id = None
 
         # Fetch all categories to check if category exists
         try:
-            categories_resp = await utils.make_GET_API_call_to_CCow(constants.URL_ASSESSMENT_CATEGORIES, ctx=ctx)
+            categories_resp = await utils.make_API_call_to_CCow_and_get_response(constants.URL_ASSESSMENT_CATEGORIES, "GET", ctx=ctx)
             
             # Handle error response
-            if isinstance(categories_resp, str):
+            categories_error = utils.build_structured_error(categories_resp, "create_assessment:categories")
+            if categories_error:
                 logger.error(f"create_assessment error: Failed to fetch categories: {categories_resp}\n")
-                return {"success": False, "error": f"Failed to fetch assessment categories"}
-            
-            if isinstance(categories_resp, dict) and categories_resp.get("Description"):
-                logger.error(f"create_assessment error: Failed to fetch categories: {categories_resp}\n")
-                return {"success": False, "error": f"Failed to fetch assessment categories"}
+                return vo.AssessmentCreateResponseVO(success=False, error=categories_error)
             
             # Expect list response
             items = categories_resp
@@ -104,39 +101,36 @@ async def create_assessment(yaml_content: str, ctx: Context | None = None) -> di
                 create_category_payload = {"name": category_name}
                 create_category_resp = await utils.make_API_call_to_CCow_and_get_response(constants.URL_ASSESSMENT_CATEGORIES,"POST",create_category_payload, ctx=ctx)
                 # Handle error response from category creation
-                if isinstance(create_category_resp, str):
+                category_create_error = utils.build_structured_error(create_category_resp, "create_assessment:create_category")
+                if category_create_error:
                     logger.error(f"create_assessment error: Failed to create category: {create_category_resp}\n")
-                    return {"success": False, "error": f"Failed to create category"}
+                    return vo.AssessmentCreateResponseVO(success=False, error=category_create_error)
                 
                 if isinstance(create_category_resp, dict):
-                    if "Message" in create_category_resp:
-                        logger.error(f"create_assessment error: Failed to create category: {create_category_resp}\n")
-                        return {"success": False, "error": create_category_resp}
-
                     # Extract category ID from successful creation
                     category_id = create_category_resp.get("id")
                     if not category_id:
                         logger.error(f"create_assessment error: Category created but no ID returned: {create_category_resp}\n")
-                        return {"success": False, "error": f"Failed to create category"}
+                        return vo.AssessmentCreateResponseVO(success=False, error=utils.build_structured_error("Failed to create category", "create_assessment"))
                     
                     logger.info(f"Category '{category_name}' created successfully with ID: {category_id}\n")
                 else:
                     logger.error(f"create_assessment error: Unexpected response type when creating category: {type(create_category_resp)}\n")
-                    return {"success": False, "error": f"Unexpected response type when creating category"}
+                    return vo.AssessmentCreateResponseVO(success=False, error=utils.build_structured_error("Unexpected response type when creating category", "create_assessment"))
             else:
                 logger.info(f"Using existing category '{category_name}' with ID: {category_id}\n")
                 
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.error(f"create_assessment error: Unable to resolve or create category: {e}\n")
-            return {"success": False, "error": f"Unable to resolve or create category: {e}"}
+            return vo.AssessmentCreateResponseVO(success=False, error=utils.build_structured_error(f"Unable to resolve or create category: {e}", "create_assessment"))
 
         try:
             file_bytes = yaml_content.encode("utf-8")
             file_b64 = base64.b64encode(file_bytes).decode("utf-8")
         except Exception as be:
             logger.error(f"create_assessment error: Failed to encode YAML content: {be}\n")
-            return {"success": False, "error": f"Failed to encode YAML content: {be}"}
+            return vo.AssessmentCreateResponseVO(success=False, error=utils.build_structured_error(f"Failed to encode YAML content: {be}", "create_assessment"))
 
         payload = {
             "name": str(name).strip(),
@@ -152,16 +146,13 @@ async def create_assessment(yaml_content: str, ctx: Context | None = None) -> di
         logger.debug("create_assessment output: {}\n".format(json.dumps(resp) if isinstance(resp, dict) else resp))
         
         # Ensure response is always a dict (utils can return string on error)
-        if isinstance(resp, str):
+        response_error = utils.build_structured_error(resp, "create_assessment:create")
+        if response_error:
             logger.error("create_assessment error: {}\n".format(resp))
-            return {"success": False, "error": resp}
+            return vo.AssessmentCreateResponseVO(success=False, error=response_error)
         
         # If response is already a dict, check for error fields
         if isinstance(resp, dict):
-            if "Message" in resp:
-                logger.error("create_assessment error: {}\n".format(resp))
-                return {"success": False, "error": resp}
-            
             # Extract assessment ID from response
             assessment_id = resp.get("id", "")
             
@@ -179,15 +170,15 @@ async def create_assessment(yaml_content: str, ctx: Context | None = None) -> di
                 logger.info(f"Assessment created URL: {ui_url}")
             
             # Return successful response with URL and category name
-            return {"success": True, "data": resp, "url": ui_url, "categoryName": category_name}
+            return vo.AssessmentCreateResponseVO(success=True, data=resp, url=ui_url, categoryName=category_name)
         
         # Fallback: wrap unexpected response type
         logger.error("create_assessment error: Unexpected response type: {}\n".format(type(resp)))
-        return {"success": False, "error": f"Unexpected response type: {resp}"}
+        return vo.AssessmentCreateResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {resp}", "create_assessment"))
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("create_assessment error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error creating assessment: {e}"}
+        return vo.AssessmentCreateResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error creating assessment: {e}", "create_assessment"))
 
 
 
@@ -198,7 +189,7 @@ async def suggest_control_config_citations(
     description: str,
     controlId: str = "",
     ctx: Context | None = None
-) -> dict:
+) -> vo.ControlCitationSuggestionResponseVO:
     """
     Suggest control citations for a given control name or description.
     
@@ -241,7 +232,7 @@ async def suggest_control_config_citations(
         # Validate mandatory assessmentId
         if not assessmentId or not str(assessmentId).strip():
             logger.error("suggest_control_config_citations error: assessmentId is mandatory\n")
-            return {"success": False, "error": "assessmentId is mandatory"}
+            return vo.ControlCitationSuggestionResponseVO(success=False, error=utils.build_structured_error("assessmentId is mandatory", "suggest_control_config_citations"))
         
         # Log assessment and control IDs for context
         logger.info(f"suggest_control_config_citations: assessmentId={assessmentId}\n")
@@ -252,7 +243,7 @@ async def suggest_control_config_citations(
         
         if not controlName or not str(controlName).strip():
             logger.error("suggest_control_config_citations error: control name is mandatory and cannot be empty\n")
-            return {"success": False, "error": "control name is mandatory and cannot be empty"}
+            return vo.ControlCitationSuggestionResponseVO(success=False, error=utils.build_structured_error("control name is mandatory and cannot be empty", "suggest_control_config_citations"))
         
         # Build payload - using minimal required fields
         payload = {
@@ -272,24 +263,16 @@ async def suggest_control_config_citations(
         logger.debug("suggest_control_config_citations payload: {}\n".format(json.dumps(payload)))
         
         # Make API call
-        resp = await utils.make_API_call_to_CCow(payload, constants.URL_GET_SIMILAR_CONTROLS, ctx=ctx)
+        resp = await utils.make_API_call_to_CCow_and_get_response(constants.URL_GET_SIMILAR_CONTROLS, "POST", payload, ctx=ctx)
         logger.debug("suggest_control_config_citations output: {}\n".format(json.dumps(resp) if isinstance(resp, dict) else resp))
         
         # Handle error response
-        if isinstance(resp, str):
+        response_error = utils.build_structured_error(resp, "suggest_control_config_citations")
+        if response_error:
             logger.error("suggest_control_config_citations error: {}\n".format(resp))
-            return {"success": False, "error": resp}
+            return vo.ControlCitationSuggestionResponseVO(success=False, error=response_error)
         
         if isinstance(resp, dict):
-            # Check for error fields
-            if "error" in resp:
-                logger.error("suggest_control_config_citations error: {}\n".format(resp.get("error")))
-                return {"success": False, "error": resp.get("error")}
-            
-            if "Message" in resp:
-                logger.error("suggest_control_config_citations error: {}\n".format(resp))
-                return {"success": False, "error": resp}
-            
             # Abstract and return only necessary fields
             items = resp.get("items", [])
             authorityDocument = resp.get("authorityDocument", "")
@@ -306,7 +289,7 @@ async def suggest_control_config_citations(
                         if isinstance(suggestion, dict):
                             abstracted_suggestion = {
                                 "Name": suggestion.get("Name", ""),
-                                "Control ID": suggestion.get("Control ID", ""),
+                                "Control ID": str(suggestion.get("Control ID", "")),
                                 "Control Classification": suggestion.get("Control Classification", ""),
                                 "Impact Zone": suggestion.get("Impact Zone", ""),
                                 "Control Requirement": suggestion.get("Control Requirement", ""),
@@ -314,20 +297,22 @@ async def suggest_control_config_citations(
                                 "Control Type": suggestion.get("Control Type", ""),
                                 "Score": suggestion.get("Score", 0.0)
                             }
-                            abstracted_item["suggestions"].append(abstracted_suggestion)
-                    abstracted_items.append(abstracted_item)
+                            abstracted_item["suggestions"].append(
+                                vo.ControlCitationSuggestionVO.model_validate(abstracted_suggestion)
+                            )
+                    abstracted_items.append(vo.ControlCitationSuggestionItemVO.model_validate(abstracted_item))
             
             logger.info(f"suggest_control_config_citations: Successfully retrieved {len(abstracted_items)} suggestion item(s)\n")
-            return {"success": True, "items": abstracted_items,"authorityDocument": authorityDocument, "next_action": "attachToControl"}
+            return vo.ControlCitationSuggestionResponseVO(success=True, items=abstracted_items, authorityDocument=authorityDocument, next_action="attachToControl")
         
         # Fallback: wrap unexpected response type
         logger.error("suggest_control_config_citations error: Unexpected response type: {}\n".format(type(resp)))
-        return {"success": False, "error": f"Unexpected response type: {resp}"}
+        return vo.ControlCitationSuggestionResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {resp}", "suggest_control_config_citations"))
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("suggest_control_config_citations error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error suggesting control citations: {e}"}
+        return vo.ControlCitationSuggestionResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error suggesting control citations: {e}", "suggest_control_config_citations"))
 
 
 @mcp.tool(annotations=utils.tool_annotations("List Assessments",read_only=True))
@@ -336,7 +321,7 @@ async def list_assessments(
     categoryName: str = "",
     assessmentName: str = "",
     ctx: Context | None = None
-) -> assessment_vo.AssessmentListVO:
+) -> vo.AssessmentListResponseVO:
     """
     Get all assessments with optional filtering.
     
@@ -358,13 +343,19 @@ async def list_assessments(
     try:
         logger.info("list_assessments: \n")
         
-        output=await utils.make_GET_API_call_to_CCow(constants.URL_PLANS+"?fields=basic&category_id="+categoryId+"&category_name_contains="+categoryName+"&name_contains="+assessmentName, ctx=ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLANS, "GET", {
+            "fields": "basic",
+            "category_id": categoryId,
+            "category_name_contains": categoryName,
+            "name_contains": assessmentName,
+        }, ctx=ctx)
 
-        if isinstance(output, str) or "error" in output:
+        output_error = utils.build_structured_error(output, "assistant:list_assessments")
+        if output_error:
             logger.error("list_assessments error: {}\n".format(output))
-            return assessment_vo.AssessmentListVO(error="Facing internal error")
-        
-        assessments: List[assessment_vo.AssessmentVO] = []
+            return vo.AssessmentListResponseVO(success=False, error=output_error)
+
+        assessments: List[vo.AssessmentListItemVO] = []
         
         if isinstance(output, dict) and "items" in output:
             items = output["items"]
@@ -374,29 +365,32 @@ async def list_assessments(
         for item in items:
             if isinstance(item, dict) and "name" in item and "categoryName" in item:
                 assessments.append(
-                    assessment_vo.AssessmentVO(
+                    vo.AssessmentListItemVO(
                         id=item.get("id"),
                         name=item.get("name"),
-                        category_name=item.get("categoryName")
+                        categoryName=item.get("categoryName")
                     )
                 )
         
         logger.debug("list_assessments: Found {} assessment(s)\n".format(len(assessments)))
         logger.debug(f"list_assessments: All assessments:\n{assessments}")      
 
-        return assessment_vo.AssessmentListVO(assessments=assessments)
+        return vo.AssessmentListResponseVO(success=True, assessments=assessments)
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("list_assessments error: {}\n".format(e))
-        return assessment_vo.AssessmentListVO(error="Facing internal error")
+        return vo.AssessmentListResponseVO(
+            success=False,
+            error=utils.build_structured_error(f"Unexpected error: {e}", "assistant:list_assessments"),
+        )
 
 
 @mcp.tool(annotations=utils.tool_annotations("List Assessment Controls",read_only=True))
 async def list_assessment_control_configs(
     assessmentId: str,
     ctx: Context | None = None
-) -> dict:
+) -> vo.AssessmentControlConfigListResponseVO:
     """
     List all control configs for a given assessment id
     
@@ -421,7 +415,7 @@ async def list_assessment_control_configs(
         
         if not assessmentId or not str(assessmentId).strip():
             logger.error("list_assessment_control_configs error: assessmentId is mandatory\n")
-            return {"success": False, "error": "assessmentId is mandatory"}
+            return vo.AssessmentControlConfigListResponseVO(success=False, error=utils.build_structured_error("assessmentId is mandatory", "list_assessment_control_configs"))
         
         assessment_id = str(assessmentId).strip()
         page_size = 100
@@ -432,19 +426,31 @@ async def list_assessment_control_configs(
         
         # Recursively fetch pages using TotalPage from response (max 10 pages)
         while has_next and cur_page <= max_pages:
-            query_params = f"?page={cur_page}&page_size={page_size}&plan_id={assessment_id}&fields=basic&is_leaf_control=true&include_additional_context=true"
-            logger.debug(f"list_assessment_control_configs fetching page {cur_page}: {query_params}\n")
+            logger.debug(
+                "list_assessment_control_configs fetching page %s with page_size=%s, plan_id=%s, fields=basic, is_leaf_control=true, include_additional_context=true\n",
+                cur_page,
+                page_size,
+                assessment_id,
+            )
             
-            output = await utils.make_GET_API_call_to_CCow(constants.URL_PLAN_CONTROLS + query_params, ctx=ctx)
+            output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_PLAN_CONTROLS, "GET", {
+                "page": cur_page,
+                "page_size": page_size,
+                "plan_id": assessment_id,
+                "fields": "basic",
+                "is_leaf_control": "true",
+                "include_additional_context": "true",
+            }, ctx=ctx)
             
             logger.error("list_assessment_control_configs page: {}\noutput: {}\n".format(cur_page, output))
 
 
             # Handle error response
-            if isinstance(output, str) or (isinstance(output, dict) and "error" in output):
+            output_error = utils.build_structured_error(output, "list_assessment_control_configs")
+            if output_error:
                 if cur_page == 1:
                     logger.error("list_assessment_control_configs error: {}\n".format(output))
-                    return {"success": False, "error": "Failed to fetch controls"}
+                    return vo.AssessmentControlConfigListResponseVO(success=False, error=output_error)
                 # If error on subsequent pages, break and return what we have
                 has_next = False
                 break
@@ -461,7 +467,7 @@ async def list_assessment_control_configs(
                 # Abstract and add only necessary fields
                 for item in items:
                     if isinstance(item, dict) and "id" in item and "name" in item:
-                        abstracted_control = {
+                        abstracted_control = vo.AssessmentControlConfigVO.model_validate({
                             "id": item.get("id", ""),
                             "name": item.get("name", ""),
                             "description": item.get("description", ""),
@@ -469,7 +475,7 @@ async def list_assessment_control_configs(
                             "controlNumber": item.get("displayable", ""),
                             "context": item.get("context", ""),
                             "additionalContext": item.get("additionalContext", "")
-                        }
+                        })
                         all_controls.append(abstracted_control)
                 
                 # Get total pages from response and determine if there are more pages
@@ -486,12 +492,12 @@ async def list_assessment_control_configs(
 
         logger.info(f"list_assessment_control_configs: Final All control : \n {all_controls}")
 
-        return {"success": True, "controls": all_controls, "totalCount": len(all_controls)}
+        return vo.AssessmentControlConfigListResponseVO(success=True, controls=all_controls, totalCount=len(all_controls))
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("list_assessment_control_configs error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error listing assessment controls: {e}"}
+        return vo.AssessmentControlConfigListResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error listing assessment controls: {e}", "list_assessment_control_configs"))
 
 
 # @mcp.tool()
@@ -598,7 +604,7 @@ async def attach_citation_to_control_config(
     controlNames: List[str],
     confirm: bool = False,
     ctx: Context | None = None
-) -> dict:
+) -> vo.CitationAttachmentResponseVO:
     """
     Attach citation to a control in an assessment.
     
@@ -652,27 +658,27 @@ async def attach_citation_to_control_config(
         
         if not assessmentId or not str(assessmentId).strip():
             logger.error("attach_citation_to_control_config error: assessmentId is mandatory\n")
-            return {"success": False, "error": "assessmentId is mandatory"}
+            return vo.CitationAttachmentResponseVO(success=False, error=utils.build_structured_error("assessmentId is mandatory", "attach_citation_to_control_config"))
         
         if not controlId or not str(controlId).strip():
             logger.error("attach_citation_to_control_config error: controlId is mandatory\n")
-            return {"success": False, "error": "controlId is mandatory"}
+            return vo.CitationAttachmentResponseVO(success=False, error=utils.build_structured_error("controlId is mandatory", "attach_citation_to_control_config"))
         
         if not authorityDocument or not str(authorityDocument).strip():
             logger.error("attach_citation_to_control_config error: authorityDocument is mandatory\n")
-            return {"success": False, "error": "authorityDocument is mandatory"}
+            return vo.CitationAttachmentResponseVO(success=False, error=utils.build_structured_error("authorityDocument is mandatory", "attach_citation_to_control_config"))
         
         if not controlIdsInAuthorityDocument or not isinstance(controlIdsInAuthorityDocument, list) or len(controlIdsInAuthorityDocument) == 0:
             logger.error("attach_citation_to_control_config error: controlIdsInAuthorityDocument must be a non-empty list\n")
-            return {"success": False, "error": "controlIdsInAuthorityDocument must be a non-empty list"}
+            return vo.CitationAttachmentResponseVO(success=False, error=utils.build_structured_error("controlIdsInAuthorityDocument must be a non-empty list", "attach_citation_to_control_config"))
         
         if not sortId or not str(sortId).strip():
             logger.error("attach_citation_to_control_config error: sortId is mandatory\n")
-            return {"success": False, "error": "sortId is mandatory"}
+            return vo.CitationAttachmentResponseVO(success=False, error=utils.build_structured_error("sortId is mandatory", "attach_citation_to_control_config"))
         
         if not controlNames or not isinstance(controlNames, list) or len(controlNames) == 0:
             logger.error("attach_citation_to_control_config error: controlNames must be a non-empty list\n")
-            return {"success": False, "error": "controlNames must be a non-empty list"}
+            return vo.CitationAttachmentResponseVO(success=False, error=utils.build_structured_error("controlNames must be a non-empty list", "attach_citation_to_control_config"))
         
         assessment_id = str(assessmentId).strip()
         control_id = str(controlId).strip()
@@ -680,20 +686,20 @@ async def attach_citation_to_control_config(
         # If confirm=False, return preview for user confirmation
         if not confirm:
             logger.info("attach_citation_to_control_config: Returning confirmation preview\n")
-            return {
-                "success": True,
-                "message": "Confirmation required before attaching citation to control config",
-                "assessmentId": assessment_id,
-                "controlId": control_id,
-                "citationDetails": {
-                    "authorityDocument": str(authorityDocument).strip(),
-                    "controlIdsInAuthorityDocument": controlIdsInAuthorityDocument,
-                    "sortId": str(sortId).strip(),
-                    "controlNames": controlNames
-                },
-                "next_step": "Review the assessment, control config ID and citation details above. If correct, re-run with confirm=True to attach the citation.",
-                "next_action": "Await for user confirmation",
-            }
+            return vo.CitationAttachmentResponseVO(
+                success=True,
+                message="Confirmation required before attaching citation to control config",
+                assessmentId=assessment_id,
+                controlId=control_id,
+                citationDetails=vo.CitationDetailsVO(
+                    authorityDocument=str(authorityDocument).strip(),
+                    controlIdsInAuthorityDocument=controlIdsInAuthorityDocument,
+                    sortId=str(sortId).strip(),
+                    controlNames=controlNames,
+                ),
+                next_step="Review the assessment, control config ID and citation details above. If correct, re-run with confirm=True to attach the citation.",
+                next_action="Await for user confirmation",
+            )
         
         # Build payload
         payload = {
@@ -720,30 +726,26 @@ async def attach_citation_to_control_config(
         logger.debug("attach_citation_to_control_config output: {}\n".format(json.dumps(resp) if isinstance(resp, dict) else resp))
         
         # Handle error response
-        if isinstance(resp, str):
+        response_error = utils.build_structured_error(resp, "attach_citation_to_control_config")
+        if response_error:
             logger.error("attach_citation_to_control_config error: {}\n".format(resp))
-            return {"success": False, "error": resp}
-        
+            return vo.CitationAttachmentResponseVO(success=False, error=response_error)
+
         if isinstance(resp, dict):
-            # Check for error fields
-            if "Message" in resp:
-                logger.error("attach_citation_to_control_config error: {}\n".format(resp))
-                return {"success": False, "error": resp}
-            
             # Abstract and return only necessary fields
             items = resp.get("items", [])
-            abstracted_citations = []
+            abstracted_citations: list[vo.CitationAttachmentVO] = []
             for item in items:
                 if isinstance(item, dict):
-                    abstracted_citation = {
-                        "id": item.get("id", ""),
-                        "planControlID": item.get("planControlID", ""),
-                        "authorityDocument": item.get("authorityDocument", ""),
-                        "controlNames": item.get("controlNames", []),
-                        "controlsInAuthorityDocument": item.get("controlsInAuthorityDocument", []),
-                        "sortID": item.get("sortID", ""),
-                        "status": item.get("status", "")
-                    }
+                    abstracted_citation = vo.CitationAttachmentVO(
+                        id=item.get("id", ""),
+                        planControlID=item.get("planControlID", ""),
+                        authorityDocument=item.get("authorityDocument", ""),
+                        controlNames=item.get("controlNames", []),
+                        controlsInAuthorityDocument=item.get("controlsInAuthorityDocument", []),
+                        sortID=item.get("sortID", ""),
+                        status=item.get("status", "")
+                    )
                     abstracted_citations.append(abstracted_citation)
 
             logger.info(f"attach_citation_to_control_config: Successfully attached {len(abstracted_citations)} citation(s)\n")
@@ -778,16 +780,16 @@ async def attach_citation_to_control_config(
                 logger.warning(f"attach_citation_to_control_config: Failed to sync CCF IDs (citation still attached): {sync_error}\n")
                 logger.debug(traceback.format_exc())
             
-            return {"success": True, "citations": abstracted_citations, "next_action": "fetch control source summary"}
+            return vo.CitationAttachmentResponseVO(success=True, citations=abstracted_citations, next_action="fetch control source summary")
         
         # Fallback: wrap unexpected response type
         logger.error("attach_citation_to_control_config error: Unexpected response type: {}\n".format(type(resp)))
-        return {"success": False, "error": f"Unexpected response type: {resp}"}
+        return vo.CitationAttachmentResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {resp}", "attach_citation_to_control_config"))
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("attach_citation_to_control_config error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error attaching citation to control: {e}"}
+        return vo.CitationAttachmentResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error attaching citation to control: {e}", "attach_citation_to_control_config"))
 
 @mcp.tool(annotations=utils.tool_annotations("Create SQL Query Evidence",read_only=False))
 async def create_sql_query_evidence(
@@ -799,7 +801,7 @@ async def create_sql_query_evidence(
     entityHierarchyReferenceName: str = None,
     additionalContextReferenceName: str = None,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.SqlQueryEvidenceMutationResponseVO:
     """
     Create a SQL query evidence for a control configuration.
     
@@ -861,15 +863,15 @@ async def create_sql_query_evidence(
         
         if not controlConfigId or not str(controlConfigId).strip():
             logger.error("create_sql_query_evidence error: controlConfigId is mandatory\n")
-            return {"success": False, "error": "controlConfigId is mandatory"}
+            return vo.SqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error("controlConfigId is mandatory", "create_sql_query_evidence"))
         
         if not sqlquery or not str(sqlquery).strip():
             logger.error("create_sql_query_evidence error: sqlquery is mandatory\n")
-            return {"success": False, "error": "sqlquery is mandatory"}
+            return vo.SqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error("sqlquery is mandatory", "create_sql_query_evidence"))
         
         if not newEvidenceName or not str(newEvidenceName).strip():
             logger.error("create_sql_query_evidence error: newEvidenceName is mandatory\n")
-            return {"success": False, "error": "newEvidenceName is mandatory"}
+            return vo.SqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error("newEvidenceName is mandatory", "create_sql_query_evidence"))
         
         # Build payload according to API specification
         payload = {
@@ -887,15 +889,15 @@ async def create_sql_query_evidence(
 
         if not confirm:
             logger.info("create_sql_query_evidence: Returning confirmation preview\n")
-            return {
-                "success": True,
-                "message": "Confirmation required before creating SQL query",
-                "controlConfigId": str(controlConfigId).strip(),
-                "sqlQuery": payload["sqlQuery"],
-                "newEvidenceName": payload["evidenceName"],
-                "referedEvidenceNames": payload["referedEvidenceNames"],
-                "next_step": "Review the SQL query above. If you need to modify it, provide the updated sqlquery parameter when calling with confirm=True. If correct, re-run with confirm=True to create and attach the query."
-            }
+            return vo.SqlQueryEvidenceMutationResponseVO(
+                success=True,
+                message="Confirmation required before creating SQL query",
+                controlConfigId=str(controlConfigId).strip(),
+                sqlQuery=payload["sqlQuery"],
+                newEvidenceName=payload["evidenceName"],
+                referedEvidenceNames=payload["referedEvidenceNames"],
+                next_step="Review the SQL query above. If you need to modify it, provide the updated sqlquery parameter when calling with confirm=True. If correct, re-run with confirm=True to create and attach the query.",
+            )
         
         url = f"{constants.URL_PLAN_CONTROLS}/{str(controlConfigId).strip()}/sql-query-evidences"
         
@@ -913,46 +915,38 @@ async def create_sql_query_evidence(
         logger.debug("create_sql_query_evidence output: {}\n".format(json.dumps(resp) if isinstance(resp, dict) else resp))
         
         # Handle error response
-        if isinstance(resp, str):
+        response_error = utils.build_structured_error(resp, "create_sql_query_evidence")
+        if response_error:
             logger.error("create_sql_query_evidence error: {}\n".format(resp))
-            return {"success": False, "error": resp}
-        
-        if isinstance(resp, dict):
-            # Check for error fields
-            if "Message" in resp:
-                logger.error("create_sql_query_evidence error: {}\n".format(resp))
-                return {"success": False, "error": resp}
-            
-            if "error" in resp:
-                logger.error("create_sql_query_evidence error: {}\n".format(resp.get("error")))
-                return {"success": False, "error": resp.get("error")}
+            return vo.SqlQueryEvidenceMutationResponseVO(success=False, error=response_error)
 
+        if isinstance(resp, dict):
             rule_id = resp.get("ruleId")
             evidence_id = resp.get("evidenceId")
 
             if rule_id:
                 logger.info(f"create_sql_query_evidence: Successfully created SQL query with ruleId: {rule_id}\n")
-                return {
-                    "success": True,
-                    "evidenceId": evidence_id,
-                    "message": "SQL query and evidence config created successfully",
-                    "next_step": "Would you like to add documentation notes for this SQL query on the control? This is optional but recommended for traceability."
-                }
+                return vo.SqlQueryEvidenceMutationResponseVO(
+                    success=True,
+                    evidenceId=evidence_id,
+                    message="SQL query and evidence config created successfully",
+                    next_step="Would you like to add documentation notes for this SQL query on the control? This is optional but recommended for traceability.",
+                )
         
         # Fallback: wrap unexpected response type
         logger.error("create_sql_query_evidence error: Unexpected response type: {}\n".format(type(resp)))
-        return {"success": False, "error": f"Unexpected response type: {resp}"}
+        return vo.SqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {resp}", "create_sql_query_evidence"))
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("create_sql_query_evidence error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error creating SQL query: {e}"}
+        return vo.SqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error creating SQL query: {e}", "create_sql_query_evidence"))
 
 @mcp.tool(annotations=utils.tool_annotations("List SQL Query Evidence",read_only=True))
 async def list_sql_query_evidence(
     controlConfigId: str,
     ctx: Context | None = None
-) -> dict:
+) -> vo.SqlQueryEvidenceListResponseVO:
     """
     List all SQL query evidences for a given control configuration.
     
@@ -979,38 +973,39 @@ async def list_sql_query_evidence(
         
         if not controlConfigId or not str(controlConfigId).strip():
             logger.error("list_sql_query_evidence error: controlConfigId is mandatory\n")
-            return {"success": False, "error": "controlConfigId is mandatory"}
+            return vo.SqlQueryEvidenceListResponseVO(success=False, error=utils.build_structured_error("controlConfigId is mandatory", "list_sql_query_evidence"))
         
         control_config_id = str(controlConfigId).strip()
         url = f"{constants.URL_PLAN_CONTROLS}/{control_config_id}/sql-query-evidences"
         
         logger.debug("list_sql_query_evidence URL: {}\n".format(url))
         
-        output = await utils.make_GET_API_call_to_CCow(url, ctx=ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(url, "GET", ctx=ctx)
         
-        if isinstance(output, str) or (isinstance(output, dict) and "error" in output):
+        output_error = utils.build_structured_error(output, "list_sql_query_evidence")
+        if output_error:
             logger.error("list_sql_query_evidence error: {}\n".format(output))
-            return {"success": False, "error": "Failed to fetch SQL query evidences"}
-        
+            return vo.SqlQueryEvidenceListResponseVO(success=False, error=output_error)
+
         if isinstance(output, dict):
-            if "Message" in output:
-                logger.error("list_sql_query_evidence error: {}\n".format(output))
-                return {"success": False, "error": output}
-            
             items = output.get("items", [])
             if not isinstance(items, list):
                 items = []
             
             logger.info(f"list_sql_query_evidence: Found {len(items)} SQL query evidence(s)\n")
-            return {"success": True, "evidences": items, "totalCount": len(items)}
+            return vo.SqlQueryEvidenceListResponseVO(
+                success=True,
+                evidences=[vo.SqlQueryEvidenceItemVO.model_validate(item) for item in items if isinstance(item, dict)],
+                totalCount=len(items),
+            )
 
         logger.error("list_sql_query_evidence error: Unexpected response type: {}\n".format(type(output)))
-        return {"success": False, "error": f"Unexpected response type: {output}"}
+        return vo.SqlQueryEvidenceListResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {output}", "list_sql_query_evidence"))
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("list_sql_query_evidence error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error listing SQL query evidences: {e}"}
+        return vo.SqlQueryEvidenceListResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error listing SQL query evidences: {e}", "list_sql_query_evidence"))
 
 @mcp.tool(annotations=utils.tool_annotations("Update SQL Query Evidence",read_only=False))
 async def update_sql_query_evidence(
@@ -1023,7 +1018,7 @@ async def update_sql_query_evidence(
     entityHierarchyReferenceName: str = None,
     additionalContextReferenceName: str = None,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.SqlQueryEvidenceMutationResponseVO:
     """
     Update an existing SQL query evidence for a control configuration.
     
@@ -1064,19 +1059,19 @@ async def update_sql_query_evidence(
         
         if not controlConfigId or not str(controlConfigId).strip():
             logger.error("update_sql_query_evidence error: controlConfigId is mandatory\n")
-            return {"success": False, "error": "controlConfigId is mandatory"}
+            return vo.SqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error("controlConfigId is mandatory", "update_sql_query_evidence"))
         
         if not evidenceId or not str(evidenceId).strip():
             logger.error("update_sql_query_evidence error: evidenceId is mandatory\n")
-            return {"success": False, "error": "evidenceId is mandatory"}
+            return vo.SqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error("evidenceId is mandatory", "update_sql_query_evidence"))
         
         if not sqlquery or not str(sqlquery).strip():
             logger.error("update_sql_query_evidence error: sqlquery is mandatory\n")
-            return {"success": False, "error": "sqlquery is mandatory"}
+            return vo.SqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error("sqlquery is mandatory", "update_sql_query_evidence"))
         
         if not newEvidenceName or not str(newEvidenceName).strip():
             logger.error("update_sql_query_evidence error: newEvidenceName is mandatory\n")
-            return {"success": False, "error": "newEvidenceName is mandatory"}
+            return vo.SqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error("newEvidenceName is mandatory", "update_sql_query_evidence"))
         
         # Build payload according to API specification
         payload = {
@@ -1094,16 +1089,16 @@ async def update_sql_query_evidence(
 
         if not confirm:
             logger.info("update_sql_query_evidence: Returning confirmation preview\n")
-            return {
-                "success": True,
-                "message": "Confirmation required before updating SQL query evidence",
-                "controlConfigId": str(controlConfigId).strip(),
-                "evidenceId": str(evidenceId).strip(),
-                "sqlQuery": payload["sqlQuery"],
-                "newEvidenceName": payload["evidenceName"],
-                "referedEvidenceNames": payload["referedEvidenceNames"],
-                "next_step": "Review the updated SQL query above. If you need to modify it, provide the updated sqlquery parameter when calling with confirm=True. If correct, re-run with confirm=True to update the SQL query evidence."
-            }
+            return vo.SqlQueryEvidenceMutationResponseVO(
+                success=True,
+                message="Confirmation required before updating SQL query evidence",
+                controlConfigId=str(controlConfigId).strip(),
+                evidenceId=str(evidenceId).strip(),
+                sqlQuery=payload["sqlQuery"],
+                newEvidenceName=payload["evidenceName"],
+                referedEvidenceNames=payload["referedEvidenceNames"],
+                next_step="Review the updated SQL query above. If you need to modify it, provide the updated sqlquery parameter when calling with confirm=True. If correct, re-run with confirm=True to update the SQL query evidence.",
+            )
         
         url = f"{constants.URL_PLAN_CONTROLS}/{str(controlConfigId).strip()}/sql-query-evidences/{str(evidenceId).strip()}"
         
@@ -1120,39 +1115,31 @@ async def update_sql_query_evidence(
         logger.debug("update_sql_query_evidence output: {}\n".format(json.dumps(resp) if isinstance(resp, dict) else resp))
         
         # Handle error response
-        if isinstance(resp, str):
+        response_error = utils.build_structured_error(resp, "update_sql_query_evidence")
+        if response_error:
             logger.error("update_sql_query_evidence error: {}\n".format(resp))
-            return {"success": False, "error": resp}
-        
-        if isinstance(resp, dict):
-            # Check for error fields
-            if "Message" in resp:
-                logger.error("update_sql_query_evidence error: {}\n".format(resp))
-                return {"success": False, "error": resp}
-            
-            if "error" in resp:
-                logger.error("update_sql_query_evidence error: {}\n".format(resp.get("error")))
-                return {"success": False, "error": resp.get("error")}
+            return vo.SqlQueryEvidenceMutationResponseVO(success=False, error=response_error)
 
+        if isinstance(resp, dict):
             updated_evidence_id = resp.get("evidenceId") or str(evidenceId).strip()
 
             logger.info(f"update_sql_query_evidence: Successfully updated SQL query evidence with evidenceId: {updated_evidence_id}\n")
-            return {
-                "success": True,
-                "evidenceId": updated_evidence_id,
-                "message": "SQL query evidence updated successfully",
-            }
+            return vo.SqlQueryEvidenceMutationResponseVO(
+                success=True,
+                evidenceId=updated_evidence_id,
+                message="SQL query evidence updated successfully",
+            )
         
         logger.error("update_sql_query_evidence error: Unexpected response type: {}\n".format(type(resp)))
-        return {"success": False, "error": f"Unexpected response type: {resp}"}
+        return vo.SqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {resp}", "update_sql_query_evidence"))
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("update_sql_query_evidence error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error updating SQL query evidence: {e}"}
+        return vo.SqlQueryEvidenceMutationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error updating SQL query evidence: {e}", "update_sql_query_evidence"))
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Control Source Summary",read_only=True))
-async def fetch_control_source_summary(controlId: str, ctx: Context | None = None) -> ControlSourceSummaryResponseVO:
+async def fetch_control_source_summary(controlId: str, ctx: Context | None = None) -> vo.ControlSourceSummaryResponseVO:
     """
     Fetch aggregated source summary for a control config, including linked control configs, evidences (including schema), and lineage depth.
     This tool is the PRIMARY way to gather SQL query context for a control config.
@@ -1170,9 +1157,9 @@ async def fetch_control_source_summary(controlId: str, ctx: Context | None = Non
         controlId (str): Plan control ID provided by the user (mandatory).
 
     Returns:
-        ControlSourceSummaryResponseVO containing:
+        vo.ControlSourceSummaryResponseVO containing:
             - success (bool): API invocation status.
-            - data (ControlSourceSummaryVO, optional): Source summary (lineage, evidence, schema) on success.
+            - data (vo.ControlSourceSummaryVO, optional): Source summary (lineage, evidence, schema) on success.
             - error (str, optional): Validation or API error details.
             - next_action (str, optional): Recommended next action.
     """
@@ -1181,7 +1168,7 @@ async def fetch_control_source_summary(controlId: str, ctx: Context | None = Non
 
         if not controlId or not str(controlId).strip():
             logger.error("fetch_control_source_summary error: controlId is mandatory\n")
-            return ControlSourceSummaryResponseVO(success=False, error="controlId is mandatory")
+            return vo.ControlSourceSummaryResponseVO(success=False, error=utils.build_structured_error("controlId is mandatory", "fetch_control_source_summary"))
 
         payload = {"controlID": str(controlId).strip()}
         logger.debug(
@@ -1201,19 +1188,16 @@ async def fetch_control_source_summary(controlId: str, ctx: Context | None = Non
             )
         )
 
-        if isinstance(resp, str):
+        response_error = utils.build_structured_error(resp, "fetch_control_source_summary")
+        if response_error:
             logger.error("fetch_control_source_summary error: {}\n".format(resp))
-            return ControlSourceSummaryResponseVO(success=False, error=resp)
+            return vo.ControlSourceSummaryResponseVO(success=False, error=response_error)
 
         if isinstance(resp, dict):
-            if "Message" in resp:
-                logger.error("fetch_control_source_summary error: {}\n".format(resp))
-                return ControlSourceSummaryResponseVO(success=False, error=str(resp))
-
             try:
-                summary_data = ControlSourceSummaryVO(**resp)
+                summary_data = vo.ControlSourceSummaryVO(**resp)
                 logger.info("fetch_control_source_summary: Successfully parsed response into VO\n")
-                response = ControlSourceSummaryResponseVO(
+                response = vo.ControlSourceSummaryResponseVO(
                     success=True, 
                     data=summary_data,
                 )
@@ -1229,9 +1213,9 @@ async def fetch_control_source_summary(controlId: str, ctx: Context | None = Non
             except Exception as parse_error:
                 logger.error(f"fetch_control_source_summary error: Failed to parse response: {parse_error}\n")
                 logger.debug(traceback.format_exc())
-                return ControlSourceSummaryResponseVO(
+                return vo.ControlSourceSummaryResponseVO(
                     success=False, 
-                    error=f"Failed to parse response: {parse_error}"
+                    error=utils.build_structured_error(f"Failed to parse response: {parse_error}", "fetch_control_source_summary")
                 )
 
         logger.error(
@@ -1239,22 +1223,22 @@ async def fetch_control_source_summary(controlId: str, ctx: Context | None = Non
                 type(resp)
             )
         )
-        return ControlSourceSummaryResponseVO(
+        return vo.ControlSourceSummaryResponseVO(
             success=False, 
-            error=f"Unexpected response type: {resp}", 
+            error=utils.build_structured_error(f"Unexpected response type: {resp}", "fetch_control_source_summary"), 
             next_action="create sql query evidence"
         )
 
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_control_source_summary error: {}\n".format(e))
-        return ControlSourceSummaryResponseVO(
+        return vo.ControlSourceSummaryResponseVO(
             success=False,
-            error=f"Unexpected error fetching control source summary: {e}",
+            error=utils.build_structured_error(f"Unexpected error fetching control source summary: {e}", "fetch_control_source_summary"),
         )
 
 @mcp.tool(annotations=utils.tool_annotations("Get Evidence Sample Data",read_only=True))
-async def get_evidence_sample_data(controlConfigId: str, evidenceNames: List[str] | None = None, records: int = 3, ctx: Context | None = None) -> dict:
+async def get_evidence_sample_data(controlConfigId: str, evidenceNames: List[str] | None = None, records: int = 3, ctx: Context | None = None) -> vo.EvidenceSampleResponseVO:
     """
     Fetch concrete evidence samples for a control config.
 
@@ -1284,7 +1268,7 @@ async def get_evidence_sample_data(controlConfigId: str, evidenceNames: List[str
 
         if not controlConfigId or not str(controlConfigId).strip():
             logger.error("get_evidence_sample_data error: controlConfigId is mandatory\n")
-            return {"success": False, "error": "controlConfigId is mandatory"}
+            return vo.EvidenceSampleResponseVO(success=False, error=utils.build_structured_error("controlConfigId is mandatory", "get_evidence_sample_data"))
 
         try:
             record_count = int(records)
@@ -1313,44 +1297,33 @@ async def get_evidence_sample_data(controlConfigId: str, evidenceNames: List[str
 
         logger.debug("get_evidence_sample_data output: {}\n".format(json.dumps(resp) if isinstance(resp, dict) else resp))
 
-        if isinstance(resp, str):
+        response_error = utils.build_structured_error(resp, "get_evidence_sample_data")
+        if response_error:
             logger.error("get_evidence_sample_data error: {}\n".format(resp))
-            return {"success": False, "error": resp}
+            return vo.EvidenceSampleResponseVO(success=False, error=response_error)
 
         if isinstance(resp, dict):
-            if "error" in resp or "Message" in resp:
-                logger.error("get_evidence_sample_data error: {}\n".format(resp))
-                return {"success": False, "error": resp.get("error") or resp}
-
             logger.info("get_evidence_sample_data: Received dict payload\n")
 
         if isinstance(resp, list):
             logger.info(f"get_evidence_sample_data: Retrieved samples for {len(resp)} control(s)\n")
-            response = {
-                "success": True,
-                "controlId": payload["controlID"],
-                "evidences": resp,
-            }
-
+            response = vo.EvidenceSampleResponseVO(success=True, controlId=payload["controlID"], evidences=resp)
             if resp and len(resp)>0:
-                response["next_action"]="create sql query"
+                response.next_action="create sql query"
             else:
-                response["next_action"] = "CREATE_SQL_QUERY_FROM_SCHEMA_OR_REQUEST_USER_SAMPLES"
+                response.next_action = "CREATE_SQL_QUERY_FROM_SCHEMA_OR_REQUEST_USER_SAMPLES"
             return response
 
         logger.error("get_evidence_sample_data error: Unexpected response type: {}\n".format(type(resp)))
-        return {
-            "success": False,
-            "error": f"Unexpected response type: {resp}",
-        }
+        return vo.EvidenceSampleResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {resp}", "get_evidence_sample_data"))
 
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_evidence_sample_data error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error fetching evidence samples: {e}"}
+        return vo.EvidenceSampleResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error fetching evidence samples: {e}", "get_evidence_sample_data"))
 
 @mcp.tool(annotations=utils.tool_annotations("Get Entity Hierarchy",read_only=True))
-async def get_entity_hierarchy(ctx: Context | None = None) -> dict:
+async def get_entity_hierarchy(ctx: Context | None = None) -> vo.EntityHierarchyResponseVO:
     """
     Use this tool when the user wants to automate control operations,
     or before creating an SQL query.
@@ -1366,30 +1339,27 @@ async def get_entity_hierarchy(ctx: Context | None = None) -> dict:
         logger.info("get_entity_hierarchy: \n")
         
         # Make GET API call to ServiceNow entities endpoint
-        output = await utils.make_GET_API_call_to_CCow(constants.URL_GET_ENTITY_HIERARCHY, ctx=ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_GET_ENTITY_HIERARCHY, "GET", ctx=ctx)
         
         # Handle error response
-        if isinstance(output, str) or (isinstance(output, dict) and "error" in output):
+        output_error = utils.build_structured_error(output, "get_entity_hierarchy")
+        if output_error:
             logger.error("get_entity_hierarchy error: {}\n".format(output))
-            return {"success": False, "error": "Failed to fetch entity hierarchy"}
+            return vo.EntityHierarchyResponseVO(success=False, error=output_error)
         
         # Check for error fields in response
         if isinstance(output, dict):
-            if "Message" in output:
-                logger.error("get_entity_hierarchy error: {}\n".format(output))
-                return {"success": False, "error": output}
-            
             logger.info(f"get_entity_hierarchy: Successfully retrieved entity hierarchy\n")
-            return {"success": True, "data": output}
+            return vo.EntityHierarchyResponseVO(success=True, data=output)
         
         # Fallback: wrap unexpected response type
         logger.error("get_entity_hierarchy error: Unexpected response type: {}\n".format(type(output)))
-        return {"success": False, "error": f"Unexpected response type: {output}"}
+        return vo.EntityHierarchyResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {output}", "get_entity_hierarchy"))
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_entity_hierarchy error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error fetching entity hierarchy: {e}"}
+        return vo.EntityHierarchyResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error fetching entity hierarchy: {e}", "get_entity_hierarchy"))
 
 @mcp.tool(annotations=utils.tool_annotations("Create Control Note",read_only=False))
 async def create_control_config_note(
@@ -1399,7 +1369,7 @@ async def create_control_config_note(
     topic: str,
     confirm: bool = False,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.NoteMutationResponseVO:
     """
     Create a documentation note on a control configuration to record SQL query logic, evidence generation strategy, and implementation context.
     
@@ -1439,15 +1409,15 @@ async def create_control_config_note(
         
         if not controlConfigId or not str(controlConfigId).strip():
             logger.error("create_control_config_note error: controlConfigId is mandatory\n")
-            return {"success": False, "error": "controlConfigId is mandatory"}
+            return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error("controlConfigId is mandatory", "create_control_config_note"))
         
         if not assessmentId or not str(assessmentId).strip():
             logger.error("create_control_config_note error: assessmentId is mandatory\n")
-            return {"success": False, "error": "assessmentId is mandatory"}
+            return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error("assessmentId is mandatory", "create_control_config_note"))
         
         if not notes or not str(notes).strip():
             logger.error("create_control_config_note error: notes content is mandatory\n")
-            return {"success": False, "error": "notes content is mandatory"}
+            return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error("notes content is mandatory", "create_control_config_note"))
         
         # Build payload
         payload = {
@@ -1459,14 +1429,14 @@ async def create_control_config_note(
 
         if not confirm:
             logger.info("create_control_config_note: Returning confirmation preview\n")
-            return {
-                "success": True,
-                "message": "Confirmation required before creating note",
-                "controlConfigId": payload["planControlID"],
-                "topic": payload["topic"],
-                "notes": payload["notes"],
-                "next_step": "Review the Note above. If you need to modify it, provide the updated note parameter when calling with confirm=True. If correct, re-run with confirm=True to create note."
-        }
+            return vo.NoteMutationResponseVO(
+                success=True,
+                message="Confirmation required before creating note",
+                controlConfigId=payload["planControlID"],
+                topic=payload["topic"],
+                notes=payload["notes"],
+                next_step="Review the Note above. If you need to modify it, provide the updated note parameter when calling with confirm=True. If correct, re-run with confirm=True to create note."
+            )
         
         # Construct URL with control config ID
         url = constants.URL_PLAN_CONTROL_NOTES.format(controlConfigId=str(controlConfigId).strip())
@@ -1484,7 +1454,7 @@ async def create_control_config_note(
         )
 
         if resp_raw.status_code == 502:
-            return {"success": False, "error": error_constants.ERROR_BAD_GATEWAY}
+            return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error(error_constants.ERROR_BAD_GATEWAY, "create_control_config_note"))
         
         
         if resp_raw.status_code == 201:
@@ -1501,11 +1471,7 @@ async def create_control_config_note(
                 noteId = resp.get("id")
             
             logger.info(f"create_control_config_note: Successfully created note with status 201\n")
-            return {
-                "success": True,
-                "noteId": noteId,
-                "message": "Note created successfully",
-            }
+            return vo.NoteMutationResponseVO(success=True, noteId=noteId, message="Note created successfully")
         else:
             # Error - parse error response
             error_resp = {}
@@ -1520,22 +1486,22 @@ async def create_control_config_note(
             # Check for error fields in response
             if isinstance(error_resp, dict):
                 if "Message" in error_resp:
-                    return {"success": False, "error": error_resp}
+                    return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error(error_resp, "create_control_config_note"))
                 if "error" in error_resp:
-                    return {"success": False, "error": error_resp.get("error")}
+                    return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error(error_resp.get("error"), "create_control_config_note"))
 
-            return {"success": False, "error": f"Failed to create note: HTTP {resp_raw.status_code}"}
+            return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error(f"Failed to create note: HTTP {resp_raw.status_code}", "create_control_config_note"))
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("create_control_config_note error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error creating control config note: {e}"}
+        return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error creating control config note: {e}", "create_control_config_note"))
 
 @mcp.tool(annotations=utils.tool_annotations("List Control Notes",read_only=True))
 async def list_control_config_notes(
     controlConfigId: str,
     ctx: Context | None = None
-) -> dict:
+) -> vo.NoteListResponseVO:
     """
     List all notes for a given control configuration.
     
@@ -1559,50 +1525,47 @@ async def list_control_config_notes(
         
         if not controlConfigId or not str(controlConfigId).strip():
             logger.error("list_control_config_notes error: controlConfigId is mandatory\n")
-            return {"success": False, "error": "controlConfigId is mandatory"}
+            return vo.NoteListResponseVO(success=False, error=utils.build_structured_error("controlConfigId is mandatory", "list_control_config_notes"))
         
         control_config_id = str(controlConfigId).strip()
         url = constants.URL_PLAN_CONTROL_NOTES.format(controlConfigId=control_config_id)
         
         logger.debug("list_control_config_notes URL: {}\n".format(url))
         
-        output = await utils.make_GET_API_call_to_CCow(url, ctx=ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(url, "GET", ctx=ctx)
         
         logger.info(f"create_control_config_note: \n Response : {output}\n")
 
-        if isinstance(output, str) or (isinstance(output, dict) and "error" in output):
+        output_error = utils.build_structured_error(output, "list_control_config_notes")
+        if output_error:
             logger.error("list_control_config_notes error: {}\n".format(output))
-            return {"success": False, "error": "Failed to fetch control config notes"}
+            return vo.NoteListResponseVO(success=False, error=output_error)
         
         if isinstance(output, dict):
-            if "Message" in output:
-                logger.error("list_control_config_notes error: {}\n".format(output))
-                return {"success": False, "error": output}
-            
             items = output.get("items", [])
             if not isinstance(items, list):
                 items = []
 
-            abstracted_items = []
+            abstracted_items: list[vo.NoteItemVO] = []
             for item in items:
                 if isinstance(item, dict):
-                    abstracted_item = {
-                        "id": item.get("id", ""),
-                        "topic": item.get("topic", ""),
-                        "notes": item.get("notes", ""),
-                    }
+                    abstracted_item = vo.NoteItemVO(
+                        id=item.get("id", ""),
+                        topic=item.get("topic", ""),
+                        notes=item.get("notes", ""),
+                    )
                     abstracted_items.append(abstracted_item)
             
             logger.info(f"list_control_config_notes: {abstracted_items} \n Found {len(abstracted_items)} note(s)\n")
-            return {"success": True, "notes": abstracted_items, "totalCount": len(abstracted_items)}
+            return vo.NoteListResponseVO(success=True, notes=abstracted_items, totalCount=len(abstracted_items))
         
         logger.error("list_control_config_notes error: Unexpected response type: {}\n".format(type(output)))
-        return {"success": False, "error": f"Unexpected response type: {output}"}
+        return vo.NoteListResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {output}", "list_control_config_notes"))
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("list_control_config_notes error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error listing control config notes: {e}"}
+        return vo.NoteListResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error listing control config notes: {e}", "list_control_config_notes"))
 
 @mcp.tool(annotations=utils.tool_annotations("Update Control Note",read_only=False))
 async def update_control_config_note(
@@ -1613,7 +1576,7 @@ async def update_control_config_note(
     topic: str,
     confirm: bool = False,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.NoteMutationResponseVO:
     """
     Update an existing documentation note on a control configuration.
     
@@ -1650,19 +1613,19 @@ async def update_control_config_note(
         
         if not controlConfigId or not str(controlConfigId).strip():
             logger.error("update_control_config_note error: controlConfigId is mandatory\n")
-            return {"success": False, "error": "controlConfigId is mandatory"}
+            return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error("controlConfigId is mandatory", "update_control_config_note"))
         
         if not noteId or not str(noteId).strip():
             logger.error("update_control_config_note error: noteId is mandatory\n")
-            return {"success": False, "error": "noteId is mandatory"}
+            return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error("noteId is mandatory", "update_control_config_note"))
         
         if not assessmentId or not str(assessmentId).strip():
             logger.error("update_control_config_note error: assessmentId is mandatory\n")
-            return {"success": False, "error": "assessmentId is mandatory"}
+            return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error("assessmentId is mandatory", "update_control_config_note"))
         
         if not notes or not str(notes).strip():
             logger.error("update_control_config_note error: notes content is mandatory\n")
-            return {"success": False, "error": "notes content is mandatory"}
+            return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error("notes content is mandatory", "update_control_config_note"))
         
         # Build payload
         payload = {
@@ -1674,15 +1637,15 @@ async def update_control_config_note(
 
         if not confirm:
             logger.info("update_control_config_note: Returning confirmation preview\n")
-            return {
-                "success": True,
-                "message": "Confirmation required before updating note",
-                "controlConfigId": payload["planControlID"],
-                "noteId": str(noteId).strip(),
-                "topic": payload["topic"],
-                "notes": payload["notes"],
-                "next_step": "Review the updated Note above. If you need to modify it, provide the updated notes or topic parameters when calling with confirm=True. If correct, re-run with confirm=True to update the note."
-            }
+            return vo.NoteMutationResponseVO(
+                success=True,
+                message="Confirmation required before updating note",
+                controlConfigId=payload["planControlID"],
+                noteId=str(noteId).strip(),
+                topic=payload["topic"],
+                notes=payload["notes"],
+                next_step="Review the updated Note above. If you need to modify it, provide the updated notes or topic parameters when calling with confirm=True. If correct, re-run with confirm=True to update the note."
+            )
         
         # Construct URL with control config ID and note ID
         url = f"{constants.URL_PLAN_CONTROL_NOTES.format(controlConfigId=str(controlConfigId).strip())}/{str(noteId).strip()}"
@@ -1700,15 +1663,11 @@ async def update_control_config_note(
         )
 
         if resp_raw.status_code == 502:
-            return {"success": False, "error": error_constants.ERROR_BAD_GATEWAY}
+            return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error(error_constants.ERROR_BAD_GATEWAY, "update_control_config_note"))
         
         if resp_raw.status_code == 204:
             logger.info(f"update_control_config_note: Successfully updated note with status 204\n")
-            return {
-                "success": True,
-                "noteId": str(noteId).strip(),
-                "message": "Note updated successfully",
-            }
+            return vo.NoteMutationResponseVO(success=True, noteId=str(noteId).strip(), message="Note updated successfully")
         else:
             # Error - parse error response
             error_resp = {}
@@ -1723,16 +1682,16 @@ async def update_control_config_note(
             # Check for error fields in response
             if isinstance(error_resp, dict):
                 if "Message" in error_resp:
-                    return {"success": False, "error": error_resp}
+                    return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error(error_resp, "update_control_config_note"))
                 if "error" in error_resp:
-                    return {"success": False, "error": error_resp.get("error")}
+                    return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error(error_resp.get("error"), "update_control_config_note"))
 
-            return {"success": False, "error": f"Failed to update note: HTTP {resp_raw.status_code}"}
+            return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error(f"Failed to update note: HTTP {resp_raw.status_code}", "update_control_config_note"))
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("update_control_config_note error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error updating control config note: {e}"}
+        return vo.NoteMutationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error updating control config note: {e}", "update_control_config_note"))
     
 @mcp.tool(annotations=utils.tool_annotations("Fetch Rule Readme",read_only=True))
 async def fetch_rule_readme(name: str, ctx: Context | None = None) -> workflow_vo.RuleReadmeResponseVO:
@@ -1757,16 +1716,17 @@ async def fetch_rule_readme(name: str, ctx: Context | None = None) -> workflow_v
     try:
         logger.info(f"fetch_rule_readme: searching for rule '{name}'\n")
 
-        output = await utils.make_GET_API_call_to_CCow(f"{constants.URL_FETCH_RULE_README}?name={name}", ctx=ctx)
+        output = await utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_RULE_README, "GET", {"name": name}, ctx=ctx)
         logger.debug("rule readme output: {}\n".format(output))
         
-        if isinstance(output, str) or "error" in output:
+        output_error = utils.build_structured_error(output, "fetch_rule_readme")
+        if output_error:
             logger.error("rule readme error: {}\n".format(output))
-            return workflow_vo.RuleReadmeResponseVO(error="Facing internal error")
+            return workflow_vo.RuleReadmeResponseVO(ruleName=name, error=output_error)
         
         if not output.get("items") or len(output["items"]) == 0:
             logger.warning(f"No rule found with name: {name}")
-            return workflow_vo.RuleReadmeResponseVO(ruleName=name, error=f"Rule '{name}' not available")
+            return workflow_vo.RuleReadmeResponseVO(ruleName=name, error=utils.build_structured_error(f"Rule '{name}' not available", "fetch_rule_readme"))
         
         rule_item = output["items"][0]
         rule_name = rule_item.get("name", name)
@@ -1774,15 +1734,16 @@ async def fetch_rule_readme(name: str, ctx: Context | None = None) -> workflow_v
         
         if not readme_hash:
             logger.warning(f"No README hash found for rule: {name}")
-            return workflow_vo.RuleReadmeResponseVO(ruleName=rule_name, error=f"README not available for rule: {name}")
+            return workflow_vo.RuleReadmeResponseVO(ruleName=rule_name, error=utils.build_structured_error(f"README not available for rule: {name}", "fetch_rule_readme"))
         
         try:
-            readme_response = await utils.make_GET_API_call_to_CCow(f"{constants.URL_FETCH_FILE_BY_HASH}/{readme_hash}", ctx=ctx)
+            readme_response = await utils.make_API_call_to_CCow_and_get_response(f"{constants.URL_FETCH_FILE_BY_HASH}/{readme_hash}", "GET", ctx=ctx)
             logger.debug(f"README fetch response for rule {rule_name}: {readme_response}")
             
-            if isinstance(readme_response, str) or "error" in readme_response:
+            readme_error = utils.build_structured_error(readme_response, "fetch_rule_readme:content")
+            if readme_error:
                 logger.error(f"Failed to fetch README content for rule {name}: {readme_response}")
-                return workflow_vo.RuleReadmeResponseVO(ruleName=rule_name, error=f"Failed to fetch README content for rule: {name}")
+                return workflow_vo.RuleReadmeResponseVO(ruleName=rule_name, error=readme_error)
             
             readme_text = ""
             if isinstance(readme_response, dict):
@@ -1794,25 +1755,25 @@ async def fetch_rule_readme(name: str, ctx: Context | None = None) -> workflow_v
                         readme_text = file_content
                 else:
                     logger.warning(f"No FileContent found in response for rule: {name}")
-                    return workflow_vo.RuleReadmeResponseVO(ruleName=rule_name, error=f"README not available for rule: {name}")
+                    return workflow_vo.RuleReadmeResponseVO(ruleName=rule_name, error=utils.build_structured_error(f"README not available for rule: {name}", "fetch_rule_readme"))
             elif isinstance(readme_response, str):
                 readme_text = readme_response
             
             if not readme_text:
                 logger.warning(f"No README content found for rule: {name}")
-                return workflow_vo.RuleReadmeResponseVO(ruleName=rule_name, error=f"README not available for rule: {name}")
+                return workflow_vo.RuleReadmeResponseVO(ruleName=rule_name, error=utils.build_structured_error(f"README not available for rule: {name}", "fetch_rule_readme"))
             
             logger.debug(f"Successfully fetched README for rule: {rule_name}")
             return workflow_vo.RuleReadmeResponseVO(readmeText=readme_text, ruleName=rule_name)
             
         except Exception as fetch_error:
             logger.error(f"Failed to fetch README content for rule {name}: {fetch_error}")
-            return workflow_vo.RuleReadmeResponseVO(ruleName=rule_name, error=f"Failed to fetch README content for rule: {name}")
+            return workflow_vo.RuleReadmeResponseVO(ruleName=rule_name, error=utils.build_structured_error(f"Failed to fetch README content for rule: {name}", "fetch_rule_readme"))
 
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_rule_readme error: {}\n".format(e))
-        return workflow_vo.RuleReadmeResponseVO(error="Facing internal error")
+        return workflow_vo.RuleReadmeResponseVO(ruleName=name, error=utils.build_structured_error(f"Unexpected error: {e}", "fetch_rule_readme"))
 
 @mcp.tool(annotations=utils.tool_annotations("Validate SQL Query",read_only=True))
 async def validate_sql_query(
@@ -1823,7 +1784,7 @@ async def validate_sql_query(
     entityHierarchyReferenceName: str = None,
     additionalContextReferenceName: str = None,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.SqlValidationResponseVO:
     """
     Validate a SQL query against reference evidence data.
     
@@ -1865,27 +1826,27 @@ async def validate_sql_query(
         
         if not sqlQuery or not str(sqlQuery).strip():
             logger.error("validate_sql_query error: sqlQuery is mandatory\n")
-            return {"success": False, "error": "sqlQuery is mandatory"}
+            return vo.SqlValidationResponseVO(success=False, error=utils.build_structured_error("sqlQuery is mandatory", "validate_sql_query"))
 
         if not assessmentId or not str(assessmentId).strip():
             logger.error("validate_sql_query error: assessmentId is mandatory\n")
-            return {"success": False, "error": "assessmentId is mandatory"}
+            return vo.SqlValidationResponseVO(success=False, error=utils.build_structured_error("assessmentId is mandatory", "validate_sql_query"))
         
         if not controlId or not str(controlId).strip():
             logger.error("validate_sql_query error: controlId is mandatory\n")
-            return {"success": False, "error": "controlId is mandatory"}
+            return vo.SqlValidationResponseVO(success=False, error=utils.build_structured_error("controlId is mandatory", "validate_sql_query"))
 
         # Validate and build reference evidences payload
         validated_evidences = []
         for idx, evidence in enumerate(referenceEvidences):
             if not isinstance(evidence, dict):
                 logger.error(f"validate_sql_query error: referenceEvidences[{idx}] must be a dict\n")
-                return {"success": False, "error": f"referenceEvidences[{idx}] must be a dict"}
+                return vo.SqlValidationResponseVO(success=False, error=utils.build_structured_error(f"referenceEvidences[{idx}] must be a dict", "validate_sql_query"))
             
             evidence_name = evidence.get("name")
             if not evidence_name or not str(evidence_name).strip():
                 logger.error(f"validate_sql_query error: referenceEvidences[{idx}].name is mandatory\n")
-                return {"success": False, "error": f"referenceEvidences[{idx}].name is mandatory"}
+                return vo.SqlValidationResponseVO(success=False, error=utils.build_structured_error(f"referenceEvidences[{idx}].name is mandatory", "validate_sql_query"))
             
             evidence_id = evidence.get("id")
             evidence_file = evidence.get("file")
@@ -1893,11 +1854,11 @@ async def validate_sql_query(
             # Validate that either id or file is provided, but not both
             if evidence_id and evidence_file:
                 logger.error(f"validate_sql_query error: referenceEvidences[{idx}] cannot have both 'id' and 'file'\n")
-                return {"success": False, "error": f"referenceEvidences[{idx}] cannot have both 'id' and 'file'. Provide either 'id' or 'file'."}
+                return vo.SqlValidationResponseVO(success=False, error=utils.build_structured_error(f"referenceEvidences[{idx}] cannot have both 'id' and 'file'. Provide either 'id' or 'file'.", "validate_sql_query"))
             
             if not evidence_id and not evidence_file:
                 logger.error(f"validate_sql_query error: referenceEvidences[{idx}] must have either 'id' or 'file'\n")
-                return {"success": False, "error": f"referenceEvidences[{idx}] must have either 'id' or 'file'"}
+                return vo.SqlValidationResponseVO(success=False, error=utils.build_structured_error(f"referenceEvidences[{idx}] must have either 'id' or 'file'", "validate_sql_query"))
             
             evidence_payload = {
                 "name": str(evidence_name).strip()
@@ -1908,18 +1869,18 @@ async def validate_sql_query(
             elif evidence_file:
                 if not isinstance(evidence_file, dict):
                     logger.error(f"validate_sql_query error: referenceEvidences[{idx}].file must be a dict\n")
-                    return {"success": False, "error": f"referenceEvidences[{idx}].file must be a dict"}
+                    return vo.SqlValidationResponseVO(success=False, error=utils.build_structured_error(f"referenceEvidences[{idx}].file must be a dict", "validate_sql_query"))
                 
                 file_content = evidence_file.get("content")
                 file_type = evidence_file.get("type")
                 
                 if not file_content or not str(file_content).strip():
                     logger.error(f"validate_sql_query error: referenceEvidences[{idx}].file.content is mandatory\n")
-                    return {"success": False, "error": f"referenceEvidences[{idx}].file.content is mandatory"}
+                    return vo.SqlValidationResponseVO(success=False, error=utils.build_structured_error(f"referenceEvidences[{idx}].file.content is mandatory", "validate_sql_query"))
                 
                 if not file_type or str(file_type).strip().lower() not in ["csv", "json"]:
                     logger.error(f"validate_sql_query error: referenceEvidences[{idx}].file.type must be 'csv' or 'json'\n")
-                    return {"success": False, "error": f"referenceEvidences[{idx}].file.type must be 'csv' or 'json'"}
+                    return vo.SqlValidationResponseVO(success=False, error=utils.build_structured_error(f"referenceEvidences[{idx}].file.type must be 'csv' or 'json'", "validate_sql_query"))
                 
                 evidence_payload["file"] = {
                     "content": str(file_content).strip(),
@@ -1954,45 +1915,30 @@ async def validate_sql_query(
         logger.debug("validate_sql_query output: {}\n".format(json.dumps(resp) if isinstance(resp, dict) else resp))
         
         # Handle error response
-        if isinstance(resp, str):
+        response_error = utils.build_structured_error(resp, "validate_sql_query")
+        if response_error:
             logger.error("validate_sql_query error: {}\n".format(resp))
-            return {"success": False, "error": resp}
+            return vo.SqlValidationResponseVO(success=False, error=response_error)
         
         if isinstance(resp, dict):
             # Check for error fields
-            if "Message" in resp:
-                logger.error("validate_sql_query error: {}\n".format(resp))
-                return {"success": False, "error": resp}
-            
-            if "error" in resp:
-                logger.error("validate_sql_query error: {}\n".format(resp.get("error")))
-                return {"success": False, "error": resp.get("error")}
-            
-
             data_block = resp.get("data")
             columns = data_block.get("columns") if isinstance(data_block, dict) else None
 
             if columns and isinstance(columns, list):
                 if len(columns) != len(set(columns)):
-                    return {
-                        "success": False,
-                        "error": "The column names are duplicated"
-                    }
+                    return vo.SqlValidationResponseVO(success=False, error=utils.build_structured_error("The column names are duplicated", "validate_sql_query"))
 
-            result = {
-                "success": True,
-                "resp": resp
-            }
-            return result
+            return vo.SqlValidationResponseVO(success=True, resp=resp)
         
         # Fallback: wrap unexpected response type
         logger.error("validate_sql_query error: Unexpected response type: {}\n".format(type(resp)))
-        return {"success": False, "error": f"Unexpected response type: {resp}"}
+        return vo.SqlValidationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {resp}", "validate_sql_query"))
         
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("validate_sql_query error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error validating SQL query: {e}"}
+        return vo.SqlValidationResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error validating SQL query: {e}", "validate_sql_query"))
 
 # @mcp.tool()
 async def fetch_sql_query_feedback(
@@ -2126,7 +2072,7 @@ async def mark_control_ready_for_execution(
     primaryEvidenceName: str,
     supportingEvidenceName: str,
     ctx: Context | None = None,
-) -> dict:
+) -> vo.ReadyForExecutionResponseVO:
     """
     Mark an automated control as ready for execution.
 
@@ -2153,23 +2099,23 @@ async def mark_control_ready_for_execution(
 
         if not assessmentId or not str(assessmentId).strip():
             logger.error("mark_control_ready_for_execution error: assessmentId is mandatory\n")
-            return {"success": False, "error": "assessmentId is mandatory"}
+            return vo.ReadyForExecutionResponseVO(success=False, error=utils.build_structured_error("assessmentId is mandatory", "mark_control_ready_for_execution"))
 
         if not assessmentName or not str(assessmentName).strip():
             logger.error("mark_control_ready_for_execution error: assessmentName is mandatory\n")
-            return {"success": False, "error": "assessmentName is mandatory"}
+            return vo.ReadyForExecutionResponseVO(success=False, error=utils.build_structured_error("assessmentName is mandatory", "mark_control_ready_for_execution"))
 
         if not controlName or not str(controlName).strip():
             logger.error("mark_control_ready_for_execution error: controlName is mandatory\n")
-            return {"success": False, "error": "controlName is mandatory"}
+            return vo.ReadyForExecutionResponseVO(success=False, error=utils.build_structured_error("controlName is mandatory", "mark_control_ready_for_execution"))
 
         if not primaryEvidenceName or not str(primaryEvidenceName).strip():
             logger.error("mark_control_ready_for_execution error: primaryEvidenceName is mandatory\n")
-            return {"success": False, "error": "primaryEvidenceName is mandatory"}
+            return vo.ReadyForExecutionResponseVO(success=False, error=utils.build_structured_error("primaryEvidenceName is mandatory", "mark_control_ready_for_execution"))
 
         if not supportingEvidenceName or not str(supportingEvidenceName).strip():
             logger.error("mark_control_ready_for_execution error: supportingEvidenceName is mandatory\n")
-            return {"success": False, "error": "supportingEvidenceName is mandatory"}
+            return vo.ReadyForExecutionResponseVO(success=False, error=utils.build_structured_error("supportingEvidenceName is mandatory", "mark_control_ready_for_execution"))
 
         payload = {
             "assessmentId": str(assessmentId).strip(),
@@ -2190,37 +2136,26 @@ async def mark_control_ready_for_execution(
 
         logger.debug("mark_control_ready_for_execution output: {}\n".format(json.dumps(resp) if isinstance(resp, dict) else resp))
 
-        if isinstance(resp, str):
+        response_error = utils.build_structured_error(resp, "mark_control_ready_for_execution")
+        if response_error:
             logger.error("mark_control_ready_for_execution error: {}\n".format(resp))
-            return {"success": False, "error": resp}
+            return vo.ReadyForExecutionResponseVO(success=False, error=response_error)
 
         if isinstance(resp, dict):
-            if "Message" in resp:
-                logger.error("mark_control_ready_for_execution error: {}\n".format(resp))
-                return {"success": False, "error": resp}
-
-            if "error" in resp:
-                logger.error("mark_control_ready_for_execution error: {}\n".format(resp.get("error")))
-                return {"success": False, "error": resp.get("error")}
-
             logger.info("mark_control_ready_for_execution: Control marked ready for execution\n")
-            return {
-                "success": True,
-                "message": "Control marked ready for execution",
-                "response": resp
-            }
+            return vo.ReadyForExecutionResponseVO(success=True, message="Control marked ready for execution", response=resp)
 
         logger.error("mark_control_ready_for_execution error: Unexpected response type: {}\n".format(type(resp)))
-        return {"success": False, "error": f"Unexpected response type: {resp}"}
+        return vo.ReadyForExecutionResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {resp}", "mark_control_ready_for_execution"))
 
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("mark_control_ready_for_execution error: {}\n".format(e))
-        return {"success": False, "error": f"Unexpected error marking control ready: {e}"}
+        return vo.ReadyForExecutionResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error marking control ready: {e}", "mark_control_ready_for_execution"))
     
 
 @mcp.tool(annotations=utils.tool_annotations("Get Context Tables",read_only=True))
-async def get_context_tables(controlId: str, ctx: Context | None = None) -> dict:
+async def get_context_tables(controlId: str, ctx: Context | None = None) -> vo.ContextTablesResponseVO:
     """
     Get flattened context tables for:
     1. Entity hierarchy
@@ -2240,10 +2175,7 @@ async def get_context_tables(controlId: str, ctx: Context | None = None) -> dict
         logger.info("get_context_tables started\n")
 
         if not controlId or not str(controlId).strip():
-            return {
-                "success": False,
-                "error": "controlId is mandatory"
-            }
+            return vo.ContextTablesResponseVO(success=False, error=utils.build_structured_error("controlId is mandatory", "get_context_tables"))
 
         control_id = str(controlId).strip()
         def flatten_context(data: dict) -> tuple[list[str], list[list[str]]]:
@@ -2287,71 +2219,49 @@ async def get_context_tables(controlId: str, ctx: Context | None = None) -> dict
 
         logger.info("Fetching entity hierarchy\n")
 
-        entity_hierarchy_resp = await utils.make_GET_API_call_to_CCow(
+        entity_hierarchy_resp = await utils.make_API_call_to_CCow_and_get_response(
             constants.URL_GET_ENTITY_HIERARCHY,
+            "GET",
             ctx=ctx
         )
 
-        if (
-            isinstance(entity_hierarchy_resp, str)
-            or (isinstance(entity_hierarchy_resp, dict) and "error" in entity_hierarchy_resp)
-            or (isinstance(entity_hierarchy_resp, dict) and "Message" in entity_hierarchy_resp)
-        ):
+        entity_hierarchy_error = utils.build_structured_error(entity_hierarchy_resp, "get_context_tables:entity_hierarchy")
+        if entity_hierarchy_error:
             logger.error(f"Entity hierarchy fetch failed: {entity_hierarchy_resp}\n")
-            return {
-                "success": False,
-                "error": "Failed to fetch entity hierarchy"
-            }
+            return vo.ContextTablesResponseVO(success=False, error=entity_hierarchy_error)
 
         if isinstance(entity_hierarchy_resp, dict) and "entitiesTable" in entity_hierarchy_resp:
-            entity_hierarchy_table = entity_hierarchy_resp.get("entitiesTable", {})
+            entity_hierarchy_table = vo.ContextTableVO.model_validate(entity_hierarchy_resp.get("entitiesTable", {}))
         else:
             headers, rows = flatten_context(entity_hierarchy_resp)
-            entity_hierarchy_table = {
-                "headerRow": headers,
-                "dataRows": rows
-            }
+            entity_hierarchy_table = vo.ContextTableVO(headerRow=headers, dataRows=rows)
 
         logger.info(f"Fetching control by id={control_id}\n")
 
-        query_params = (
-            f"?fields=basic"
-            f"&include_additional_context=true"
-        )
-
-        control_resp = await utils.make_GET_API_call_to_CCow(
-            f"{constants.URL_PLAN_CONTROLS}/{control_id}{query_params}",
+        control_resp = await utils.make_API_call_to_CCow_and_get_response(
+            f"{constants.URL_PLAN_CONTROLS}/{control_id}",
+            "GET",
+            {
+                "fields": "basic",
+                "include_additional_context": "true",
+            },
             ctx=ctx
         )
 
-        if (
-            isinstance(control_resp, str)
-            or (isinstance(control_resp, dict) and "error" in control_resp)
-        ):
+        control_error = utils.build_structured_error(control_resp, "get_context_tables:control")
+        if control_error:
             logger.error(f"Control fetch failed: {control_resp}\n")
-            return {
-                "success": False,
-                "error": "Failed to fetch control"
-            }
+            return vo.ContextTablesResponseVO(success=False, error=control_error)
 
         if not control_resp:
-            return {
-                "success": False,
-                "error": f"No control found for controlId={control_id}"
-            }
+            return vo.ContextTablesResponseVO(success=False, error=utils.build_structured_error(f"No control found for controlId={control_id}", "get_context_tables"))
 
         additional_context_raw = control_resp.get("additionalContext")
         if isinstance(additional_context_raw, dict):
             headers, rows = flatten_context(additional_context_raw)
-            control_additional_context_table = {
-                "headerRow": headers,
-                "dataRows": rows
-            }
+            control_additional_context_table = vo.ContextTableVO(headerRow=headers, dataRows=rows)
         else:
-            control_additional_context_table = {
-                "headerRow": [],
-                "dataRows": []
-            }
+            control_additional_context_table = vo.ContextTableVO(headerRow=[], dataRows=[])
 
         logger.info(
             "get_context_tables completed successfully\n"
@@ -2359,18 +2269,11 @@ async def get_context_tables(controlId: str, ctx: Context | None = None) -> dict
             f"control_additional_context:\n{control_additional_context_table}"
         )
 
-        return {
-            "success": True,
-            "entity_hierarchy": entity_hierarchy_table,
-            "control_additional_context": control_additional_context_table
-        }
+        return vo.ContextTablesResponseVO(success=True, entity_hierarchy=entity_hierarchy_table, control_additional_context=control_additional_context_table)
 
     except Exception as e:
         logger.error(traceback.format_exc())
-        return {
-            "success": False,
-            "error": f"Unexpected error fetching context tables: {e}"
-        }
+        return vo.ContextTablesResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error fetching context tables: {e}", "get_context_tables"))
 
 @mcp.tool(annotations=utils.tool_annotations("Create Control Config",read_only=False))
 async def create_control_config(
@@ -2382,7 +2285,7 @@ async def create_control_config(
     entities: list[str],
     controlContext: str | None = None,
     ctx: Context | None = None
-) -> dict:
+) -> vo.CustomControlConfigResponseVO:
     """
     Create or update an assessment by adding a control config (control objective).
 
@@ -2415,26 +2318,26 @@ async def create_control_config(
         logger.info("create_control_config invoked\n")
 
         if not assessmentName or not assessmentName.strip():
-            return {"success": False, "error": "assessmentName is mandatory"}
+            return vo.CustomControlConfigResponseVO(success=False, error=utils.build_structured_error("assessmentName is mandatory", "create_control_config_custom"))
 
         if not controlObjectiveName or not controlObjectiveName.strip():
-            return {"success": False, "error": "controlObjectiveName is mandatory"}
+            return vo.CustomControlConfigResponseVO(success=False, error=utils.build_structured_error("controlObjectiveName is mandatory", "create_control_config_custom"))
 
         if not controlObjectiveDescription or not controlObjectiveDescription.strip():
-            return {"success": False, "error": "controlObjectiveDescription is mandatory"}
+            return vo.CustomControlConfigResponseVO(success=False, error=utils.build_structured_error("controlObjectiveDescription is mandatory", "create_control_config_custom"))
         
         if not controlObjectiveCategory or not controlObjectiveCategory.strip():
-            return {"success": False, "error": "controlObjectiveCategory is mandatory"}
+            return vo.CustomControlConfigResponseVO(success=False, error=utils.build_structured_error("controlObjectiveCategory is mandatory", "create_control_config_custom"))
 
         if not entityClass or not entityClass.strip():
-            return {"success": False, "error": "entityClass is mandatory"}
+            return vo.CustomControlConfigResponseVO(success=False, error=utils.build_structured_error("entityClass is mandatory", "create_control_config_custom"))
 
         if not isinstance(entities, list) or not entities:
-            return {"success": False, "error": "entities must be a non-empty array of strings"}
+            return vo.CustomControlConfigResponseVO(success=False, error=utils.build_structured_error("entities must be a non-empty array of strings", "create_control_config_custom"))
 
         for e in entities:
             if not isinstance(e, str) or not e.strip():
-                return {"success": False, "error": "Each entity must be a non-empty string"}
+                return vo.CustomControlConfigResponseVO(success=False, error=utils.build_structured_error("Each entity must be a non-empty string", "create_control_config_custom"))
 
 
         entity_payload = [
@@ -2477,31 +2380,23 @@ async def create_control_config(
 
         if isinstance(resp, str):
             logger.error(f"create_control_config error: {resp}\n")
-            return {"success": False, "error": resp}
+            return vo.CustomControlConfigResponseVO(success=False, error=utils.build_structured_error(resp, "create_control_config_custom"))
 
         if isinstance(resp, dict):
             if "id" not in resp:
-                return {"success": False, "error": f"Unexpected response: {resp}"}
-            result = {
-                "assessment_id": resp.get("id")
-            }
+                return vo.CustomControlConfigResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response: {resp}", "create_control_config_custom"))
+            result = vo.CustomControlConfigDataVO(assessment_id=resp.get("id"))
             logger.info(
-                f"create_control_config: Successfully created custom control with ID: {result['assessment_id']}\n"
+                f"create_control_config: Successfully created custom control with ID: {result.assessment_id}\n"
             )
-            return {"success": True, "data": result}
+            return vo.CustomControlConfigResponseVO(success=True, data=result)
 
-        return {
-            "success": False,
-            "error": f"Unexpected response type: {type(resp)}"
-        }
+        return vo.CustomControlConfigResponseVO(success=False, error=utils.build_structured_error(f"Unexpected response type: {type(resp)}", "create_control_config_custom"))
 
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("create_control_config error: {}\n".format(e))
-        return {
-            "success": False,
-            "error": f"Unexpected error while adding custom control: {e}"
-        }
+        return vo.CustomControlConfigResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error while adding custom control: {e}", "create_control_config_custom"))
     
 
 @mcp.tool(annotations=utils.tool_annotations("Update Control Config Contexts",read_only=False))
@@ -2511,7 +2406,7 @@ async def update_control_config_contexts(
     entities: list[str],
     controlContext: str | None = None,
     ctx: Context | None = None
-) -> dict:
+) -> vo.UpdateControlContextsResponseVO:
     """
     Update both context and additionalContext (entities) of an existing control config (control objective).
 
@@ -2532,18 +2427,18 @@ async def update_control_config_contexts(
         logger.info("update_control_config_contexts invoked\n")
 
         if not controlConfigId or not controlConfigId.strip():
-            return {"success": False, "error": "controlConfigId is mandatory"}
+            return vo.UpdateControlContextsResponseVO(success=False, error=utils.build_structured_error("controlConfigId is mandatory", "update_control_config_contexts"))
 
 
         if not entityClass or not entityClass.strip():
-            return {"success": False, "error": "entityClass is mandatory"}
+            return vo.UpdateControlContextsResponseVO(success=False, error=utils.build_structured_error("entityClass is mandatory", "update_control_config_contexts"))
 
         if not isinstance(entities, list) or not entities:
-            return {"success": False, "error": "entities must be a non-empty array of strings"}
+            return vo.UpdateControlContextsResponseVO(success=False, error=utils.build_structured_error("entities must be a non-empty array of strings", "update_control_config_contexts"))
 
         for e in entities:
             if not isinstance(e, str) or not e.strip():
-                return {"success": False, "error": "Each entity must be a non-empty string"}
+                return vo.UpdateControlContextsResponseVO(success=False, error=utils.build_structured_error("Each entity must be a non-empty string", "update_control_config_contexts"))
 
 
         controlConfigId = controlConfigId.strip()
@@ -2588,18 +2483,14 @@ async def update_control_config_contexts(
         )
 
         if resp_raw.status_code == 502:
-            return {"success": False, "error": error_constants.ERROR_BAD_GATEWAY}
+            return vo.UpdateControlContextsResponseVO(success=False, error=utils.build_structured_error(error_constants.ERROR_BAD_GATEWAY, "update_control_config_contexts"))
 
         if resp_raw.status_code == 204:
             logger.info(
                 "update_control_config_contexts: Successfully updated context and additional context "
                 f"with status {resp_raw.status_code}\n"
             )
-            return {
-                "success": True,
-                "controlConfigId": controlConfigId,
-                "message": "Control config context and additional context updated successfully"
-            }
+            return vo.UpdateControlContextsResponseVO(success=True, controlConfigId=controlConfigId, message="Control config context and additional context updated successfully")
 
         # ---- Error handling ----
         error_resp = {}
@@ -2617,18 +2508,12 @@ async def update_control_config_contexts(
 
         if isinstance(error_resp, dict):
             if "Message" in error_resp:
-                return {"success": False, "error": error_resp}
+                return vo.UpdateControlContextsResponseVO(success=False, error=utils.build_structured_error(error_resp, "update_control_config_contexts"))
             if "error" in error_resp:
-                return {"success": False, "error": error_resp.get("error")}
+                return vo.UpdateControlContextsResponseVO(success=False, error=utils.build_structured_error(error_resp.get("error"), "update_control_config_contexts"))
 
-        return {
-            "success": False,
-            "error": f"Failed to update control config contexts: HTTP {resp_raw.status_code}"
-        }
+        return vo.UpdateControlContextsResponseVO(success=False, error=utils.build_structured_error(f"Failed to update control config contexts: HTTP {resp_raw.status_code}", "update_control_config_contexts"))
 
     except Exception as e:
         logger.error(traceback.format_exc())
-        return {
-            "success": False,
-            "error": f"Unexpected error while updating control contexts: {e}"
-        }
+        return vo.UpdateControlContextsResponseVO(success=False, error=utils.build_structured_error(f"Unexpected error while updating control contexts: {e}", "update_control_config_contexts"))

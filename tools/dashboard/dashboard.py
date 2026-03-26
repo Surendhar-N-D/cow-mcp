@@ -25,18 +25,19 @@ async def get_dashboard_review_periods(ctx: Context | None = None) -> vo.CCFDash
         logger.info("get_dashboard_review_periods: \n")
         data={}
 
-        output=await utils.make_API_call_to_CCow(data, constants.URL_CCF_DASHBOARD_REVIEW_PERIODS, ctx=ctx)
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_CCF_DASHBOARD_REVIEW_PERIODS, "POST", data, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
         
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "dashboard:get_dashboard_review_periods")
+        if error:
             logger.error("get_dashboard_review_periods error: {}\n".format(output))
-            return vo.CCFDashboardReviewPeriods(error="Facing internal error")
+            return vo.CCFDashboardReviewPeriods(error=error)
 
         return vo.CCFDashboardReviewPeriods.model_validate(output)
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_dashboard_review_periods error: {}\n".format(e))
-        return vo.CCFDashboardReviewPeriods(error="Facing internal error")
+        return vo.CCFDashboardReviewPeriods(error=utils.build_structured_error(f"Unexpected error: {e}", "dashboard:get_dashboard_review_periods"))
 
 @mcp.tool(annotations=utils.tool_annotations("Get Dashboard Data",read_only=True))
 async def get_dashboard_data(period: str = "Q1 2024", ctx: Context | None = None) -> vo.DashboardSummaryVO:
@@ -89,20 +90,21 @@ async def get_dashboard_data(period: str = "Q1 2024", ctx: Context | None = None
         logger.info("get_dashboard: \n")
         logger.debug("payload: {}\n".format(data))
 
-        output=await utils.make_API_call_to_CCow(data, constants.URL_CCF_DASHBOARD_FRAMEWORK_SUMMARY, ctx=ctx)
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_CCF_DASHBOARD_FRAMEWORK_SUMMARY, "POST", data, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
         
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "dashboard:get_dashboard_data")
+        if error:
             logger.error("get_dashboard_data error: {}\n".format(output))
-            if "NO_DATA_FOUND" in output["error"]:
-                return vo.DashboardSummaryVO(error=f"There is no data found for the review period: {period}")
-            return vo.DashboardSummaryVO(error="Facing internal error")
+            if isinstance(output, dict) and output.get("error") == "NO_DATA_FOUND":
+                return vo.DashboardSummaryVO(error=utils.build_structured_error(f"There is no data found for the review period: {period}", "dashboard:get_dashboard_data"))
+            return vo.DashboardSummaryVO(error=error)
 
         return vo.DashboardSummaryVO.model_validate(output)
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_dashboard_data error: {}\n".format(e))
-        return vo.DashboardSummaryVO(error="Facing internal error")
+        return vo.DashboardSummaryVO(error=utils.build_structured_error(f"Unexpected error: {e}", "dashboard:get_dashboard_data"))
   
 @mcp.tool(annotations=utils.tool_annotations("Fetch Dashboard Framework Controls",read_only=True))
 async def fetch_dashboard_framework_controls(period: str, framework_name : str, ctx: Context | None = None) -> vo.FrameworkControlListVO:
@@ -154,12 +156,13 @@ async def fetch_dashboard_framework_controls(period: str, framework_name : str, 
         logger.debug("payload: {}\n".format(data))
         
 
-        output=await utils.make_API_call_to_CCow(data, constants.URL_CCF_DASHBOARD_CONTROL_DETAILS, ctx=ctx)
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_CCF_DASHBOARD_CONTROL_DETAILS, "POST", data, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
         
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "dashboard:fetch_dashboard_framework_controls")
+        if error:
             logger.error("fetch_dashboard_framework_controls error: {}\n".format(output))
-            return vo.FrameworkControlListVO(error="Facing internal error")
+            return vo.FrameworkControlListVO(error=error)
         
         controls: List[vo.FramworkControlVO] = []
         if output["items"]:
@@ -172,11 +175,11 @@ async def fetch_dashboard_framework_controls(period: str, framework_name : str, 
                                 totalItems=output["TotalItems"],
                                 totalPage=output["TotalPage"],
                                 page=output["Page"],
-            ).model_dump()
+            )
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_dashboard_framework_controls error: {}\n".format(e))
-        return vo.FrameworkControlListVO(error="Facing internal error")
+        return vo.FrameworkControlListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "dashboard:fetch_dashboard_framework_controls"))
     
 @mcp.tool(annotations=utils.tool_annotations("Fetch Dashboard Framework Summary",read_only=True))
 async def fetch_dashboard_framework_summary(period: str, framework_name : str, ctx: Context | None = None) -> vo.FrameworkControlListVO:
@@ -228,12 +231,13 @@ async def fetch_dashboard_framework_summary(period: str, framework_name : str, c
         logger.debug("payload: {}\n".format(data))
         
 
-        output=await utils.make_API_call_to_CCow(data, constants.URL_CCF_DASHBOARD_CONTROL_DETAILS, ctx=ctx)
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_CCF_DASHBOARD_CONTROL_DETAILS, "POST", data, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
         
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "dashboard:fetch_dashboard_framework_summary")
+        if error:
             logger.error("fetch_dashboard_framework_summary error: {}\n".format(output))
-            return vo.FrameworkControlListVO(error="Facing internal error")
+            return vo.FrameworkControlListVO(error=error)
         
         controls: List[vo.FramworkControlVO] = []
         if output["items"]:
@@ -246,11 +250,11 @@ async def fetch_dashboard_framework_summary(period: str, framework_name : str, c
                                 totalItems=output["TotalItems"],
                                 totalPage=output["TotalPage"],
                                 page=output["Page"],
-            ).model_dump()
+            )
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_dashboard_framework_summary error: {}\n".format(e))
-        return vo.FrameworkControlListVO(error="Facing internal error")
+        return vo.FrameworkControlListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "dashboard:fetch_dashboard_framework_summary"))
     
 @mcp.tool(annotations=utils.tool_annotations("Get Dashboard Common Controls Details",read_only=True))
 async def get_dashboard_common_controls_details(period: str, complianceStatus: str="", controlStatus: str="",  priority: str="", controlCategoryName: str="",page: int=1, pageSize:  int=50, ctx: Context | None = None) -> vo.CommonControlListVO:
@@ -313,11 +317,12 @@ async def get_dashboard_common_controls_details(period: str, complianceStatus: s
 
         logger.debug("payload: {}\n".format(data))
 
-        output=await utils.make_API_call_to_CCow(data,constants.URL_CCF_DASHBOARD_CONTROL_DETAILS)
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_CCF_DASHBOARD_CONTROL_DETAILS, "POST", data, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "dashboard:get_dashboard_common_controls_details")
+        if error:
             logger.error("get_dashboard_common_controls_details error: {}\n".format(output))
-            return vo.CommonControlListVO(error="Facing internal error")
+            return vo.CommonControlListVO(error=error)
         
         controls: List[vo.CommonControlVO] = []
         if output["items"]:
@@ -334,7 +339,7 @@ async def get_dashboard_common_controls_details(period: str, complianceStatus: s
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_dashboard_common_controls_details error: {}\n".format(e))
-        return vo.CommonControlListVO(error="Facing internal error")
+        return vo.CommonControlListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "dashboard:get_dashboard_common_controls_details"))
 
 
 @mcp.prompt()
@@ -397,11 +402,12 @@ async def get_top_over_due_controls_detail(period: str = "Q1 2024", count: int =
         logger.info("get_top_over_due_controls: \n")
         logger.debug("payload: {}\n".format(data))
 
-        output=await utils.make_API_call_to_CCow(data,constants.URL_CCF_DASHBOARD_CONTROL_DETAILS)
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_CCF_DASHBOARD_CONTROL_DETAILS, "POST", data, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "dashboard:get_top_over_due_controls_detail")
+        if error:
             logger.error("get_top_over_due_controls_detail error: {}\n".format(output))
-            return vo.OverdueControlListVO(error="Facing internal error")
+            return vo.OverdueControlListVO(error=error)
         
         controls: List[vo.OverdueControlVO] = []
         if output["items"]:
@@ -413,7 +419,7 @@ async def get_top_over_due_controls_detail(period: str = "Q1 2024", count: int =
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_top_over_due_controls_detail error: {}\n".format(e))
-        return vo.OverdueControlListVO(error="Facing internal error")
+        return vo.OverdueControlListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "dashboard:get_top_over_due_controls_detail"))
 
 @mcp.tool(annotations=utils.tool_annotations("Get Top Non Compliant Controls Detail",read_only=True))
 async def get_top_non_compliant_controls_detail(period: str, count= 1, page=1, ctx: Context | None = None) -> vo.NonCompliantControlListVO: 
@@ -446,11 +452,12 @@ async def get_top_non_compliant_controls_detail(period: str, count= 1, page=1, c
         logger.info("get_top_non_compliant_controls_detail: \n")
         logger.debug("payload: {}\n".format(data))
 
-        output=await utils.make_API_call_to_CCow(data,constants.URL_CCF_DASHBOARD_CONTROL_DETAILS)
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_CCF_DASHBOARD_CONTROL_DETAILS, "POST", data, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "dashboard:get_top_non_compliant_controls_detail")
+        if error:
             logger.error("get_top_non_compliant_controls_detail error: {}\n".format(output))
-            return vo.NonCompliantControlListVO(error="Facing internal error")
+            return vo.NonCompliantControlListVO(error=error)
         
         controls: List[vo.NonCompliantControlVO] = []
         if output["items"]:
@@ -462,5 +469,5 @@ async def get_top_non_compliant_controls_detail(period: str, count= 1, page=1, c
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("get_top_non_compliant_controls_detail error: {}\n".format(e))
-        return vo.NonCompliantControlListVO(error="Facing internal error")
+        return vo.NonCompliantControlListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "dashboard:get_top_non_compliant_controls_detail"))
     

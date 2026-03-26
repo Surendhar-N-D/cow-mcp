@@ -34,7 +34,7 @@ def _normalize_matrix_options(elements: List[Any]) -> None:
             _normalize_matrix_options(child_elements)
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Forms",read_only=True))
 async def list_forms(ctx: Context | None = None) -> vo.FormListVO:
     """
         Get all forms
@@ -69,7 +69,7 @@ async def list_forms(ctx: Context | None = None) -> vo.FormListVO:
         logger.error("list_forms error: {}\n".format(e))
         return vo.FormListVO(error="Facing internal error")
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Create Form",read_only=False))
 async def create_form(form: vo.CreateFormVO, ctx: Context | None = None) -> vo.CreateFormResponseVO:
     """
     Create a form
@@ -139,7 +139,7 @@ async def create_form(form: vo.CreateFormVO, ctx: Context | None = None) -> vo.C
         return vo.CreateFormResponseVO(error="Facing internal error")
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Update Form",read_only=False))
 async def update_form(
     form_id: str,
     form: vo.UpdateFormVO,
@@ -228,7 +228,7 @@ def _is_dynamic_option_active(status) -> bool:
     return False
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Dynamic Options",read_only=True))
 async def list_dynamic_options(ctx: Context | None = None) -> vo.DynamicOptionListVO:
     """
     List dynamic options. Returns only id, name, and status.
@@ -280,7 +280,7 @@ async def list_dynamic_options(ctx: Context | None = None) -> vo.DynamicOptionLi
         return vo.DynamicOptionListVO(error="Facing internal error")
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Dynamic Option",read_only=True))
 async def fetch_dynamic_option(
     dynamic_option_id: str,
     ctx: Context | None = None,
@@ -347,7 +347,7 @@ async def fetch_dynamic_option(
         return vo.DynamicOptionDetailResponseVO(error="Facing internal error")
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("List Forms Assigned To Me",read_only=True))
 async def list_forms_assigned_to_me(ctx: Context | None = None) -> vo.AssignedFormListVO:
     """
     List forms assigned to the current user. Use this when the user asks to fill a form
@@ -406,7 +406,7 @@ async def list_forms_assigned_to_me(ctx: Context | None = None) -> vo.AssignedFo
         return vo.AssignedFormListVO(error="Facing internal error")
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Fetch Complete Form",read_only=True))
 async def fetch_complete_form(
     form_id: str,
     assign_id: str,
@@ -486,7 +486,7 @@ async def fetch_complete_form(
         return vo.FormDetailResponseVO(error="Facing internal error")
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Check Form Progress",read_only=True))
 async def check_form_progress(
     form_id: str,
     assign_id: str,
@@ -542,7 +542,7 @@ async def check_form_progress(
         return vo.FormProgressResponseVO(error="Facing internal error")
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Create Form Response",read_only=False))
 async def create_form_response(
     form_id: str,
     user_id: str,
@@ -603,7 +603,7 @@ async def create_form_response(
         return vo.CreateFormResponseResponseVO(error="Facing internal error")
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Get Current User",read_only=True))
 async def get_current_user(ctx: Context | None = None) -> vo.CurrentUserResponseVO:
     """
     Get the current authenticated user (id, email, username).
@@ -648,7 +648,7 @@ async def get_current_user(ctx: Context | None = None) -> vo.CurrentUserResponse
         return vo.CurrentUserResponseVO(error="Facing internal error")
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Save Form Responses",read_only=False))
 async def save_form_responses(
     form_id: str,
     form_response_id: str,
@@ -708,7 +708,7 @@ async def save_form_responses(
         return vo.SaveFormResponsesResponseVO(error="Facing internal error")
 
 
-@mcp.tool()
+@mcp.tool(annotations=utils.tool_annotations("Submit User Form",read_only=False))
 async def submit_user_form(
     user_id: str,
     assign_id: str,
@@ -765,5 +765,4 @@ async def submit_user_form(
         logger.error(traceback.format_exc())
         logger.error("submit_user_form error: %s", e)
         return vo.SubmitUserFormResponseVO(error="Facing internal error")
-
 

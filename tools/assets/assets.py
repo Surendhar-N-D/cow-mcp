@@ -29,25 +29,26 @@ async def list_assets(ctx: Context | None = None) -> vo.AssetListVO:
     try:
         logger.info("get_assets_list: \n")
 
-        output=await utils.make_GET_API_call_to_CCow(constants.URL_ASSETS, ctx)
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_ASSETS, "GET", ctx=ctx)
         logger.debug("assets output: {}\n".format(output))
         
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assets:list_assets")
+        if error:
             logger.error("list_assets error: {}\n".format(output))
-            return vo.AssetListVO(error="Facing internal error")
+            return vo.AssetListVO(error=error)
         
         assets: List[vo.AssetVO]=[]
         for item in output["items"]:
             if "name" in item:
                 assets.append(vo.AssetVO.model_validate(item))
         
-        logger.debug("modified assets: {}\n".format(vo.AssetListVO(assets=assets).model_dump))
+        logger.debug("modified assets: {}\n".format(vo.AssetListVO(assets=assets).model_dump()))
 
         return vo.AssetListVO(assets=assets)
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("list_assets error: {}\n".format(e))
-        return vo.AssetListVO(error="Facing internal error")
+        return vo.AssetListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assets:list_assets"))
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Assets Summary",read_only=True))
 async def fetch_assets_summary(id: str, ctx: Context | None = None) -> vo.AssestsSummaryVO:
@@ -69,13 +70,14 @@ async def fetch_assets_summary(id: str, ctx: Context | None = None) -> vo.Assest
     """
     try:
         logger.info("fetch_assets_summary: \n")
-        output=await utils.make_API_call_to_CCow({
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_ASSETS_SUMMARY, "POST", {
             "planID": id,
-        },constants.URL_FETCH_ASSETS_SUMMARY, ctx=ctx)
+        }, ctx=ctx)
         
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assets:fetch_assets_summary")
+        if error:
             logger.error("fetch_assets_summary error: {}\n".format(output))
-            return vo.AssestsSummaryVO(error="Facing internal error")
+            return vo.AssestsSummaryVO(error=error)
         
         logger.debug("output: {}\n".format(json.dumps(output)))
         output = vo.AssestsSummaryVO.model_validate(output)
@@ -83,10 +85,10 @@ async def fetch_assets_summary(id: str, ctx: Context | None = None) -> vo.Assest
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_assets_summary error: {}\n".format(e))
-        return vo.AssestsSummaryVO(error="Facing internal error")
+        return vo.AssestsSummaryVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assets:fetch_assets_summary"))
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Resource Types",read_only=True))
-async def fetch_resource_types(id: str, page: int=1, pageSize: int=0, ctx: Context | None = None) -> dict:
+async def fetch_resource_types(id: str, page: int=1, pageSize: int=0, ctx: Context | None = None) -> vo.ResourceTypeListVO:
     """
         Get resource types for given asset run id.
         Use 'fetch_assets_summary' tool to get assets run id
@@ -113,34 +115,35 @@ async def fetch_resource_types(id: str, page: int=1, pageSize: int=0, ctx: Conte
         logger.debug("page: {}".format(page))
         logger.debug("pageSize: {}".format(pageSize))
         if page==0 and pageSize==0:
-            return "use pagination"
+            return vo.ResourceTypeListVO(error=utils.build_structured_error("use pagination", "assets:fetch_resource_types"))
         elif page==0 and pageSize>0:
             page=1
         elif page>0  and pageSize==0:
             pageSize=10
         elif pageSize>50:
-            return "max page size is 50"
-        output=await utils.make_API_call_to_CCow({
+            return vo.ResourceTypeListVO(error=utils.build_structured_error("max page size is 50", "assets:fetch_resource_types"))
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_RESOURCE_TYPES, "POST", {
             "planRunID": id,
             "page": page,
             "pageSize": pageSize
-        },constants.URL_FETCH_RESOURCE_TYPES, ctx=ctx)
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
 
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assets:fetch_resource_types")
+        if error:
             logger.error("fetch_resource_types error: {}\n".format(output))
-            return vo.ResourceTypeListVO(error="Facing internal error")
+            return vo.ResourceTypeListVO(error=error)
     
         resourceTypes : List[vo.ResourceTypeVO] = []
         for item in output["items"]:
             resourceTypes.append(vo.ResourceTypeVO.model_validate(item))
 
         logger.debug("modified output: {}\n".format(vo.ResourceTypeListVO(resourceTypes=resourceTypes).model_dump()))
-        return vo.ResourceTypeListVO(resourceTypes=resourceTypes).model_dump()
+        return vo.ResourceTypeListVO(resourceTypes=resourceTypes)
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_resource_types error: {}\n".format(e))
-        return vo.ResourceTypeListVO(error="Facing internal error")
+        return vo.ResourceTypeListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assets:fetch_resource_types"))
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Checks",read_only=True))
 async def fetch_checks(id: str, resourceType: str, page: int=1, pageSize: int=0, complianceStatus: str="", ctx: Context | None = None) -> vo.ChecksListVO:
@@ -185,26 +188,27 @@ async def fetch_checks(id: str, resourceType: str, page: int=1, pageSize: int=0,
         logger.debug("page: {}".format(page))
         logger.debug("pageSize: {}".format(pageSize))
         if page==0 and pageSize==0:
-            return "use pagination"
+            return vo.ChecksListVO(error=utils.build_structured_error("use pagination", "assets:fetch_checks"))
         elif page==0 and pageSize>0:
             page=1
         elif page>0  and pageSize==0:
             pageSize=10
         elif pageSize>10:
-            return "max page size is 10"
+            return vo.ChecksListVO(error=utils.build_structured_error("max page size is 10", "assets:fetch_checks"))
 
-        output=await utils.make_API_call_to_CCow({
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_CHECKS, "POST", {
             "planRunID": id,
             "resourceType": resourceType,
             "page": page,
             "pageSize": pageSize,
             "complianceStatus": complianceStatus
-        },constants.URL_FETCH_CHECKS, ctx=ctx)
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
         
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assets:fetch_checks")
+        if error:
             logger.error("fetch_checks error: {}\n".format(output))
-            return vo.ChecksListVO(error="Facing internal error")
+            return vo.ChecksListVO(error=error)
         
         checks: List[vo.CheckVO] = []
         for item in output["items"]:
@@ -218,7 +222,7 @@ async def fetch_checks(id: str, resourceType: str, page: int=1, pageSize: int=0,
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_checks error: {}\n".format(e))
-        return vo.ChecksListVO(error="Facing internal error")
+        return vo.ChecksListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assets:fetch_checks"))
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Resources",read_only=True))
 async def fetch_resources(id: str, resourceType: str, page: int=1, pageSize: int=0, complianceStatus: str="", ctx: Context | None = None) -> vo.ResourceListVO:
@@ -265,25 +269,26 @@ async def fetch_resources(id: str, resourceType: str, page: int=1, pageSize: int
         logger.debug("page: {}".format(page))
         logger.debug("pageSize: {}".format(pageSize))
         if page==0 and pageSize==0:
-            return "use pagination"
+            return vo.ResourceListVO(error=utils.build_structured_error("use pagination", "assets:fetch_resources"))
         elif page==0 and pageSize>0:
             page=1
         elif page>0  and pageSize==0:
             pageSize=10
         elif pageSize>10:
-            return "max page size is 10"
-        output=await utils.make_API_call_to_CCow({
+            return vo.ResourceListVO(error=utils.build_structured_error("max page size is 10", "assets:fetch_resources"))
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_RESOURCES, "POST", {
             "planRunID": id,
             "resourceType": resourceType,
             "page": page,
             "pageSize": pageSize,
             "complianceStatus": complianceStatus
-        },constants.URL_FETCH_RESOURCES, ctx=ctx)
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
         
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assets:fetch_resources")
+        if error:
             logger.error("fetch_resources error: {}\n".format(output))
-            return vo.ResourceListVO(error="Facing internal error")
+            return vo.ResourceListVO(error=error)
 
         output=utils.formatResources(output,True)
         resources: List[vo.ResourceVO] = []
@@ -295,11 +300,11 @@ async def fetch_resources(id: str, resourceType: str, page: int=1, pageSize: int
                                totalItems=output["totalItems"],
                                totalPage=output["totalPage"],
                                page=output["page"]
-                               ).model_dump()
+                               )
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_resources error: {}\n".format(e))
-        return vo.ResourceListVO(error="Facing internal error")
+        return vo.ResourceListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assets:fetch_resources"))
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Resources By Check Name",read_only=True))
 async def fetch_resources_by_check_name(id: str,  checkName: str, page: int=1, pageSize: int=0, ctx: Context | None = None) -> vo.ResourceListVO:
@@ -333,23 +338,24 @@ async def fetch_resources_by_check_name(id: str,  checkName: str, page: int=1, p
         logger.debug("checkName: {}".format(checkName))
 
         if page==0 and pageSize==0:
-            return "use pagination"
+            return vo.ResourceListVO(error=utils.build_structured_error("use pagination", "assets:fetch_resources_by_check_name"))
         elif page==0 and pageSize>0:
             page=1
         elif page>0  and pageSize==0:
             pageSize=10
         elif pageSize>10:
-            return "max page size is 10"
-        output=await utils.make_API_call_to_CCow({
+            return vo.ResourceListVO(error=utils.build_structured_error("max page size is 10", "assets:fetch_resources_by_check_name"))
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_RESOURCES, "POST", {
             "planRunID": id,
             "checkName": checkName,
             "page": page,
             "pageSize": pageSize
-        },constants.URL_FETCH_RESOURCES, ctx=ctx)
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assets:fetch_resources_by_check_name")
+        if error:
             logger.error("fetch_resources_by_check_name error: {}\n".format(output))
-            return vo.ResourceListVO(error="Facing internal error")
+            return vo.ResourceListVO(error=error)
         
         resources: List[vo.ResourceVO] = []
         for item in output["items"]:
@@ -361,11 +367,11 @@ async def fetch_resources_by_check_name(id: str,  checkName: str, page: int=1, p
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_resources_by_check_name error: {}\n".format(e))
-        return vo.ResourceListVO(error="Facing internal error")
+        return vo.ResourceListVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assets:fetch_resources_by_check_name"))
     
 
 # @mcp.tool()
-async def fetch_resource_types_summary(id: str, ctx: Context | None = None) -> dict:
+async def fetch_resource_types_summary(id: str, ctx: Context | None = None) -> vo.ResourceTypeSummaryVO:
     """
         Use this to get the summary on resource types
         Use this when total items in 'fetch_resource_types' is high
@@ -384,30 +390,31 @@ async def fetch_resource_types_summary(id: str, ctx: Context | None = None) -> d
         logger.info("fetch_resource_types_summary:\n")
 
         responses = await asyncio.gather(
-            utils.make_API_call_to_CCow({
+            utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_RESOURCE_TYPES, "POST", {
                 "planRunID": id,
                 "page": 1,
                 "pageSize": 10
-            }, constants.URL_FETCH_RESOURCE_TYPES, ctx=ctx),
-            utils.make_API_call_to_CCow({
+            }, ctx=ctx),
+            utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_RESOURCE_TYPES, "POST", {
                 "planRunID": id,
                 "page": 2,
                 "pageSize": 10
-            }, constants.URL_FETCH_RESOURCE_TYPES, ctx=ctx),
-            utils.make_API_call_to_CCow({
+            }, ctx=ctx),
+            utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_RESOURCE_TYPES, "POST", {
                 "planRunID": id,
                 "page": 3,
                 "pageSize": 10
-            }, constants.URL_FETCH_RESOURCE_TYPES, ctx=ctx)
+            }, ctx=ctx)
         )
 
         resource_types: List[vo.ResourceTypeVO] = []
         total_items = None
 
         for output in responses:
-            if isinstance(output, str) or  "error" in output:
+            error = utils.build_structured_error(output, "assets:fetch_resource_types_summary")
+            if error:
                 logger.error("fetch_resource_types_summary error: {}\n".format(output))
-                return vo.ResourceListVO(error="Facing internal error")
+                return vo.ResourceTypeSummaryVO(error=error)
             if total_items is None:
                 total_items = output.get("totalItems")
             for item in output.get("items", []):
@@ -419,7 +426,7 @@ async def fetch_resource_types_summary(id: str, ctx: Context | None = None) -> d
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_resource_types_summary error: {}\n".format(e))
-        return vo.ResourceListVO(error="Facing internal error")
+        return vo.ResourceTypeSummaryVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assets:fetch_resource_types_summary"))
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Checks Summary",read_only=True))
 async def fetch_checks_summary(id: str, resourceType: str, ctx: Context | None = None) -> vo.CheckSummaryVO:
@@ -447,22 +454,23 @@ async def fetch_checks_summary(id: str, resourceType: str, ctx: Context | None =
         logger.debug("id: {}".format(id))
         logger.debug("resourceType: {}".format(resourceType))
 
-        output=await utils.make_API_call_to_CCow({
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_ASSETS_DETAIL_SUMMARY, "POST", {
                 "planRunID": id,
                 "resourceType": resourceType,
                 "summaryType": "checks"
-            }, constants.URL_FETCH_ASSETS_DETAIL_SUMMARY, ctx=ctx)
+            }, ctx=ctx)
 
         logger.debug("output: {}\n".format(json.dumps(output)))
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assets:fetch_checks_summary")
+        if error:
             logger.error("fetch_checks_summary error: {}\n".format(output))
-            return vo.CheckSummaryVO(error="Facing internal error")
+            return vo.CheckSummaryVO(error=error)
 
         return vo.CheckSummaryVO.model_validate(output)
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_checks_summary error: {}\n".format(e))
-        return vo.CheckSummaryVO(error="Facing internal error")
+        return vo.CheckSummaryVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assets:fetch_checks_summary"))
     
 @mcp.tool(annotations=utils.tool_annotations("Fetch Resources Summary",read_only=True))
 async def fetch_resources_summary(id: str, resourceType: str, ctx: Context | None = None) -> vo.ResourceSummaryVO:
@@ -490,22 +498,23 @@ async def fetch_resources_summary(id: str, resourceType: str, ctx: Context | Non
         logger.debug("id: {}".format(id))
         logger.debug("fetch_resources_summary: {}".format(resourceType))
 
-        output=await utils.make_API_call_to_CCow({
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_ASSETS_DETAIL_SUMMARY, "POST", {
                 "planRunID": id,
                 "resourceType": resourceType,
                 "summaryType": "resources"
-            }, constants.URL_FETCH_ASSETS_DETAIL_SUMMARY, ctx=ctx)
+            }, ctx=ctx)
 
         logger.debug("output: {}\n".format(json.dumps(output)))
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assets:fetch_resources_summary")
+        if error:
             logger.error("fetch_checks_summary error: {}\n".format(output))
-            return vo.ResourceSummaryVO(error="Facing internal error")
+            return vo.ResourceSummaryVO(error=error)
 
         return vo.ResourceSummaryVO.model_validate(output)
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_resources_summary error: {}\n".format(e))
-        return vo.ResourceSummaryVO(error="Facing internal error")
+        return vo.ResourceSummaryVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assets:fetch_resources_summary"))
 
 @mcp.tool(annotations=utils.tool_annotations("Fetch Resources By Check Name Summary",read_only=True))
 async def fetch_resources_by_check_name_summary(id: str, resourceType: str, check: str, ctx: Context | None = None) -> vo.ResourceSummaryVO:
@@ -536,19 +545,20 @@ async def fetch_resources_by_check_name_summary(id: str, resourceType: str, chec
         logger.debug("resourceType: {}".format(resourceType))
         logger.debug("check: {}".format(check))
 
-        output=await utils.make_API_call_to_CCow({
+        output=await utils.make_API_call_to_CCow_and_get_response(constants.URL_FETCH_ASSETS_DETAIL_SUMMARY, "POST", {
             "planRunID": id,
             "resourceType": resourceType,
             "checkName": check,
             "summaryType": "resources"
-        },constants.URL_FETCH_ASSETS_DETAIL_SUMMARY, ctx=ctx)
+        }, ctx=ctx)
         logger.debug("output: {}\n".format(json.dumps(output)))
-        if isinstance(output, str) or  "error" in output:
+        error = utils.build_structured_error(output, "assets:fetch_resources_by_check_name_summary")
+        if error:
             logger.error("fetch_checks_summary error: {}\n".format(output))
-            return vo.ResourceSummaryVO(error="Facing internal error")
+            return vo.ResourceSummaryVO(error=error)
         return vo.ResourceSummaryVO.model_validate(output)
     
     except Exception as e:
         logger.error(traceback.format_exc())
         logger.error("fetch_resources_by_check_name_summary error: {}\n".format(e))
-        return vo.ResourceSummaryVO(error="Facing internal error")
+        return vo.ResourceSummaryVO(error=utils.build_structured_error(f"Unexpected error: {e}", "assets:fetch_resources_by_check_name_summary"))

@@ -54,6 +54,8 @@ URL_PLAN_INSTANCES = "/v1/plan-instances"
 URL_PLAN_INSTANCE_CONTROLS = "/v1/plan-instance-controls"
 URL_PLAN_INSTANCE_EVIDENCES = "/v1/plan-instance-evidences"
 
+URL_LINK_EVIDENCE = "/v1/evidences/link"
+
 URL_DATAHANDLER_FETCH_DATA = "/v1/datahandler/fetch-data"
 
 # ACTIONS
