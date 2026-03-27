@@ -6,7 +6,7 @@
   "description": "Real-time compliance dashboards, asset inventory, and control framework visibility for ComplianceCow.",
   "author": {
     "name": "ComplianceCow",
-    "email": "support@compliancecow.com",
+    "email": "support-dl@compliancecow.com",
     "url": "https://compliancecow.com"
   },
   "server": {
@@ -31,10 +31,10 @@
   "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/compliancecow/cow-mcp.git"
+    "url": "https://github.com/ComplianceCow/cow-mcp.git"
   },
   "homepage": "https://compliancecow.com",
-  "documentation": "https://docs.compliancecow.com/mcp/insights",
+  "documentation": "https://github.com/ComplianceCow/cow-mcp/blob/prod/README.md",
   "keywords": [
     "compliance",
     "dashboard",
@@ -49,7 +49,7 @@
   "license": "MIT",
   "long_description": "ComplianceCow Insights provides real-time visibility into your compliance posture through interactive dashboards, asset inventories, and control framework analytics. Monitor control status, track compliance percentages, identify overdue and non-compliant controls, and explore your cloud infrastructure assets with deep drill-down capabilities.\n\nKey capabilities:\n- Common Control Framework (CCF) dashboards with period-based filtering\n- Control status tracking: Completed, In Progress, Overdue, Pending\n- Framework-level compliance summaries and control details\n- Cloud asset inventory with resource type breakdowns\n- Compliance checks per resource with pass/fail analysis\n- Neo4j graph database queries for compliance evidence exploration",
   "privacy_policies": [
-    "https://compliancecow.com/privacy"
+    "https://www.compliancecow.com/trust/privacypolicy"
   ],
   "tools": [
     {

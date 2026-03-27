@@ -180,7 +180,7 @@ ComplianceCow Insights connects to your ComplianceCow tenant to retrieve complia
 - **Authentication**: OAuth credentials are used solely for API authentication and are not stored or transmitted elsewhere.
 - **Data Storage**: This server does not persist any data locally.
 
-For complete privacy information, see: https://compliancecow.com/privacy
+For complete privacy information, see: https://www.compliancecow.com/trust/privacypolicy
 
 ## Troubleshooting
 
@@ -202,4 +202,4 @@ If queries return empty results:
 
 - **Documentation**: https://docs.compliancecow.com
 - **Issues**: https://github.com/compliancecow/cow-mcp/issues
-- **Email**: support@compliancecow.com
+- **Email**: support-dl@compliancecow.com

@@ -53,8 +53,7 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 
 
-
-if __name__ == "__main__":
+def main():
     port = os.environ.get('CCOW_MCP_SERVER_PORT', "")
     portInInt = 0
 
@@ -78,3 +77,7 @@ if __name__ == "__main__":
         # mcp.settings.auth = AuthSettings(issuer_url=host)
         # mcp._auth_server_provider = CCowOAuthProvider()
         mcp.run(transport='streamable-http',port=portInInt,host='0.0.0.0')
+
+
+if __name__ == "__main__":
+    main()

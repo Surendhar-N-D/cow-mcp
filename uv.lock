@@ -203,48 +203,6 @@ wheels = [
 ]
 
 [[package]]
-name = "cowmcpservice"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "cachetools" },
-    { name = "django" },
-    { name = "fastmcp" },
-    { name = "httpx" },
-    { name = "pandas" },
-    { name = "pyyaml" },
-    { name = "requests" },
-    { name = "ruamel-yaml" },
-    { name = "toml" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiohttp", specifier = "==3.12.14" },
-    { name = "cachetools", specifier = "==6.2.1" },
-    { name = "django", specifier = "==5.2.8" },
-    { name = "fastmcp", specifier = "==2.13.0" },
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "pandas", specifier = "==2.3.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.5" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.26.0" },
-    { name = "pyyaml", specifier = "==6.0.2" },
-    { name = "requests", specifier = "==2.32.4" },
-    { name = "ruamel-yaml", specifier = "==0.18.14" },
-    { name = "toml", specifier = ">=0.10.2" },
-    { name = "uvicorn", extras = ["standard"], specifier = "==0.38.0" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "cryptography"
 version = "46.0.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1420,6 +1378,48 @@ sdist = { url = "https://files.pythonhosted.org/packages/ce/20/08dfcd9c983f6a6f4
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/0c/9d30a4ebeb6db2b25a841afbb80f6ef9a854fc3b41be131d249a977b4959/starlette-0.46.2-py3-none-any.whl", hash = "sha256:595633ce89f8ffa71a015caed34a5b2dc1c0cdb3f0f1fbd1e69339cf2abeec35", size = 72037, upload-time = "2025-04-13T13:56:16.21Z" },
 ]
+
+[[package]]
+name = "testmcpservice"
+version = "0.0.1"
+source = { editable = "." }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "cachetools" },
+    { name = "django" },
+    { name = "fastmcp" },
+    { name = "httpx" },
+    { name = "pandas" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "ruamel-yaml" },
+    { name = "toml" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiohttp", specifier = "==3.12.14" },
+    { name = "cachetools", specifier = "==6.2.1" },
+    { name = "django", specifier = "==5.2.8" },
+    { name = "fastmcp", specifier = "==2.13.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pandas", specifier = "==2.3.1" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.5" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.26.0" },
+    { name = "pyyaml", specifier = "==6.0.2" },
+    { name = "requests", specifier = "==2.32.4" },
+    { name = "ruamel-yaml", specifier = "==0.18.14" },
+    { name = "toml", specifier = ">=0.10.2" },
+    { name = "uvicorn", extras = ["standard"], specifier = "==0.38.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "toml"
