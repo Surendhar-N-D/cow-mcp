@@ -1,6 +1,8 @@
 
 # Byte-compiled / optimized / DLL files
 __pycache__
+.gitignore
+uv.lock
 
 #log
 app.log
@@ -12,3 +14,19 @@ cowmcpservice.egg-info
 
 # Environments
 .venv
+
+#vscode
+.vscode
+
+#ignore env
+.env
+allmcplocal.env
+export_mcpenv.sh
+mcplocal.env
+
+WORKFLOW_OPTIMIZATION_SUMMARY.md
+TOOL_DOMAIN_INSTRUCTIONS_ANALYSIS.md
+.DS_Store
+reports
+scripts
+app-validation.log

@@ -1,7 +1,7 @@
 [project]
 name = "cowmcpservice"
 version = "0.1.0"
-description = "Add your description here"
+description = "ComplianceCow MCP servers for compliance insights, rule automation, workflows, metrics, and issue command operations."
 readme = "README.md"
 requires-python = "~=3.13.0"
 dependencies = [
@@ -18,7 +18,17 @@ dependencies = [
     "cachetools==6.2.1",
     "uvicorn[standard]==0.38.0"
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["tools*", "utils*", "mcpconfig*", "constants*", "resources*"]
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

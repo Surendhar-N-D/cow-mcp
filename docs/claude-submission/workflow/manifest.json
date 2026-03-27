@@ -1,0 +1,169 @@
+{
+  "manifest_version": "0.3",
+  "name": "compliancecow-workflow",
+  "display_name": "ComplianceCow Workflow",
+  "version": "1.0.0",
+  "description": "Workflow orchestration and automation for compliance processes in ComplianceCow.",
+  "author": {
+    "name": "ComplianceCow",
+    "email": "support@compliancecow.com",
+    "url": "https://compliancecow.com"
+  },
+  "server": {
+    "type": "python",
+    "entry_point": "main.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "main.py"
+      ],
+      "env": {
+        "MCP_TOOLS_TO_BE_INCLUDED": "workflow",
+        "CCOW_HOST": "${user_config.ccow_host}",
+        "CCOW_CLIENT_ID": "${user_config.ccow_client_id}",
+        "CCOW_CLIENT_SECRET": "${user_config.ccow_client_secret}"
+      }
+    }
+  },
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/compliancecow/cow-mcp.git"
+  },
+  "homepage": "https://compliancecow.com",
+  "documentation": "https://docs.compliancecow.com/mcp/workflow",
+  "keywords": [
+    "compliance",
+    "workflow",
+    "automation",
+    "orchestration",
+    "events",
+    "triggers",
+    "compliancecow"
+  ],
+  "license": "MIT",
+  "long_description": "ComplianceCow Workflow enables powerful compliance automation through event-driven workflows. Create workflows that respond to system events, schedule automated compliance processes, and orchestrate complex multi-step operations using YAML-based definitions.\n\nKey capabilities:\n- Event-driven workflow triggers (system and custom events)\n- YAML-based workflow definitions with visual mermaid diagrams\n- Pre-built functions, rules, and tasks for common compliance operations\n- Conditional branching and decision points\n- Workflow resource data fetching\n- Custom event creation for external integrations",
+  "privacy_policies": [
+    "https://compliancecow.com/privacy"
+  ],
+  "tools": [
+    {
+      "name": "list_workflow_event_categories",
+      "description": "Retrieve available workflow event categories"
+    },
+    {
+      "name": "list_workflow_events",
+      "description": "Get available workflow events including system and custom events"
+    },
+    {
+      "name": "list_workflow_activity_types",
+      "description": "Get available workflow activity types"
+    },
+    {
+      "name": "list_workflow_function_categories",
+      "description": "Retrieve workflow function categories"
+    },
+    {
+      "name": "list_workflow_functions",
+      "description": "Get available workflow functions with input/output specifications"
+    },
+    {
+      "name": "list_workflow_rules",
+      "description": "Get available workflow rules"
+    },
+    {
+      "name": "fetch_workflow_rule",
+      "description": "Fetch a specific workflow rule by name"
+    },
+    {
+      "name": "fetch_task_readme",
+      "description": "Get README documentation for a task"
+    },
+    {
+      "name": "fetch_rule_readme",
+      "description": "Get README documentation for a rule"
+    },
+    {
+      "name": "list_workflow_tasks",
+      "description": "Get available workflow tasks"
+    },
+    {
+      "name": "list_workflow_condition_categories",
+      "description": "Retrieve workflow condition categories"
+    },
+    {
+      "name": "list_workflow_conditions",
+      "description": "Get available workflow conditions for branching"
+    },
+    {
+      "name": "fetch_workflow_resource_data",
+      "description": "Fetch workflow resource data for a resource type"
+    },
+    {
+      "name": "create_workflow",
+      "description": "Create a new workflow using YAML definition"
+    },
+    {
+      "name": "list_workflows",
+      "description": "List all available workflow configurations"
+    },
+    {
+      "name": "get_workflow_by_name",
+      "description": "Get a workflow configuration by name"
+    },
+    {
+      "name": "fetch_workflow_details",
+      "description": "Get detailed workflow information by ID"
+    },
+    {
+      "name": "update_workflow_summary",
+      "description": "Update workflow summary/README"
+    },
+    {
+      "name": "update_workflow_mermaid_diagram",
+      "description": "Update workflow visual diagram"
+    },
+    {
+      "name": "modify_workflow",
+      "description": "Modify an existing workflow using YAML"
+    },
+    {
+      "name": "list_workflow_predefined_variables",
+      "description": "Get available system-level predefined variables"
+    },
+    {
+      "name": "create_workflow_custom_event",
+      "description": "Create a custom event for workflow triggering"
+    },
+    {
+      "name": "trigger_workflow",
+      "description": "Execute a workflow with specified inputs"
+    }
+  ],
+  "user_config": {
+    "ccow_host": {
+      "type": "string",
+      "title": "ComplianceCow Host",
+      "description": "Your ComplianceCow API host URL (e.g., https://your-tenant.compliancecow.com/api)",
+      "required": true,
+      "sensitive": false
+    },
+    "ccow_client_id": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "OAuth Client ID for ComplianceCow API authentication",
+      "required": true,
+      "sensitive": false
+    },
+    "ccow_client_secret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "OAuth Client Secret for ComplianceCow API authentication",
+      "required": true,
+      "sensitive": true
+    }
+  }
+}

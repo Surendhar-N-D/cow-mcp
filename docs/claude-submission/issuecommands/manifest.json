@@ -1,0 +1,165 @@
+{
+  "manifest_version": "0.3",
+  "name": "compliancecow-issuecommands",
+  "display_name": "ComplianceCow Issue Commands",
+  "version": "1.0.0",
+  "description": "Assessment creation, control configuration, and evidence management for ComplianceCow.",
+  "author": {
+    "name": "ComplianceCow",
+    "email": "support@compliancecow.com",
+    "url": "https://compliancecow.com"
+  },
+  "server": {
+    "type": "python",
+    "entry_point": "main.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "main.py"
+      ],
+      "env": {
+        "MCP_TOOLS_TO_BE_INCLUDED": "assistant",
+        "CCOW_HOST": "${user_config.ccow_host}",
+        "CCOW_CLIENT_ID": "${user_config.ccow_client_id}",
+        "CCOW_CLIENT_SECRET": "${user_config.ccow_client_secret}"
+      }
+    }
+  },
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/compliancecow/cow-mcp.git"
+  },
+  "homepage": "https://compliancecow.com",
+  "documentation": "https://docs.compliancecow.com/mcp/issuecommands",
+  "keywords": [
+    "compliance",
+    "assessment",
+    "controls",
+    "evidence",
+    "configuration",
+    "sql",
+    "compliancecow"
+  ],
+  "license": "MIT",
+  "long_description": "ComplianceCow Issue Commands provides assessment creation and control configuration capabilities. Create assessments from YAML definitions, configure control evidence with SQL queries, manage citations, and track compliance through automated evidence collection.\n\nKey capabilities:\n- Assessment creation from YAML definitions\n- Control configuration with evidence mapping\n- SQL query evidence for automated data collection\n- Citation management for controls\n- Control notes and documentation\n- Entity hierarchy navigation",
+  "privacy_policies": [
+    "https://compliancecow.com/privacy"
+  ],
+  "tools": [
+    {
+      "name": "create_assessment",
+      "description": "Create assessment from YAML definition"
+    },
+    {
+      "name": "suggest_control_config_citations",
+      "description": "Get citation suggestions for control configurations"
+    },
+    {
+      "name": "list_assessments",
+      "description": "List all assessments"
+    },
+    {
+      "name": "list_assessment_control_configs",
+      "description": "List control configurations for an assessment"
+    },
+    {
+      "name": "create_control_config",
+      "description": "Create control configuration"
+    },
+    {
+      "name": "attach_citation_to_control_config",
+      "description": "Attach citation to control configuration"
+    },
+    {
+      "name": "create_sql_query_evidence",
+      "description": "Create SQL query-based evidence"
+    },
+    {
+      "name": "list_sql_query_evidence",
+      "description": "List SQL query evidence configurations"
+    },
+    {
+      "name": "update_sql_query_evidence",
+      "description": "Update SQL query evidence"
+    },
+    {
+      "name": "fetch_control_source_summary",
+      "description": "Get control source summary"
+    },
+    {
+      "name": "get_evidence_sample_data",
+      "description": "Get sample evidence data"
+    },
+    {
+      "name": "get_entity_hierarchy",
+      "description": "Get entity hierarchy structure"
+    },
+    {
+      "name": "create_control_config_note",
+      "description": "Create note on control configuration"
+    },
+    {
+      "name": "list_control_config_notes",
+      "description": "List notes for control configuration"
+    },
+    {
+      "name": "update_control_config_note",
+      "description": "Update control configuration note"
+    },
+    {
+      "name": "fetch_rule_readme",
+      "description": "Fetch rule README documentation"
+    },
+    {
+      "name": "validate_sql_query",
+      "description": "Validate SQL query syntax"
+    },
+    {
+      "name": "fetch_sql_query_feedback",
+      "description": "Get feedback on SQL query"
+    },
+    {
+      "name": "mark_control_ready_for_execution",
+      "description": "Mark control as ready for execution"
+    },
+    {
+      "name": "get_context_tables",
+      "description": "Get available context tables"
+    },
+    {
+      "name": "update_control_config_contexts",
+      "description": "Update control configuration contexts"
+    },
+    {
+      "name": "create_downloadable_file",
+      "description": "Create a downloadable file"
+    }
+  ],
+  "user_config": {
+    "ccow_host": {
+      "type": "string",
+      "title": "ComplianceCow Host",
+      "description": "Your ComplianceCow API host URL (e.g., https://your-tenant.compliancecow.com/api)",
+      "required": true,
+      "sensitive": false
+    },
+    "ccow_client_id": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "OAuth Client ID for ComplianceCow API authentication",
+      "required": true,
+      "sensitive": false
+    },
+    "ccow_client_secret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "OAuth Client Secret for ComplianceCow API authentication",
+      "required": true,
+      "sensitive": true
+    }
+  }
+}

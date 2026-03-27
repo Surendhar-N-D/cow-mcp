@@ -2001,7 +2001,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
             
             # Control is automated, fetch rule details
             try:
-                rule_details = fetch_cc_rule_by_id(rule_id, ctx)
+                rule_details = fetch_cc_rule_by_id.fn(rule_id, ctx)
                 
                 if isinstance(rule_details, dict) and "error" not in rule_details:
                     return vo.ControlAutomationResponseVO(

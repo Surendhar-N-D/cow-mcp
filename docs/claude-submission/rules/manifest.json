@@ -1,0 +1,314 @@
+{
+  "manifest_version": "0.3",
+  "name": "compliancecow-rules",
+  "display_name": "ComplianceCow Rules",
+  "version": "1.0.0",
+  "description": "Compliance rule management, automation, and control mapping for ComplianceCow.",
+  "author": {
+    "name": "ComplianceCow",
+    "email": "support@compliancecow.com",
+    "url": "https://compliancecow.com"
+  },
+  "server": {
+    "type": "python",
+    "entry_point": "main.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "main.py"
+      ],
+      "env": {
+        "MCP_TOOLS_TO_BE_INCLUDED": "rules",
+        "CCOW_HOST": "${user_config.ccow_host}",
+        "CCOW_CLIENT_ID": "${user_config.ccow_client_id}",
+        "CCOW_CLIENT_SECRET": "${user_config.ccow_client_secret}"
+      }
+    }
+  },
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/compliancecow/cow-mcp.git"
+  },
+  "homepage": "https://compliancecow.com",
+  "documentation": "https://docs.compliancecow.com/mcp/rules",
+  "keywords": [
+    "compliance",
+    "rules",
+    "automation",
+    "controls",
+    "governance",
+    "checks",
+    "assets",
+    "compliancecow"
+  ],
+  "license": "MIT",
+  "long_description": "ComplianceCow Rules provides comprehensive compliance rule management capabilities. Create, configure, and execute automated compliance rules that map to control frameworks. Manage asset checks, schedule rule executions, generate documentation, and track rule publishing status.\n\nKey capabilities:\n- Rule creation and management with I/O mapping\n- Control-to-rule attachment for automated compliance\n- Asset check management and scheduling\n- Design notes and README generation\n- Rule execution with progress tracking\n- Citation suggestions for control configurations\n- Support ticket creation for compliance issues",
+  "privacy_policies": [
+    "https://compliancecow.com/privacy"
+  ],
+  "tools": [
+    {
+      "name": "fetch_tasks_suggestions",
+      "description": "Get intelligent task suggestions for compliance automation"
+    },
+    {
+      "name": "create_support_ticket",
+      "description": "Create support tickets for compliance issues"
+    },
+    {
+      "name": "get_applications_for_tag",
+      "description": "Get applications filtered by specific tags"
+    },
+    {
+      "name": "attach_rule_to_control",
+      "description": "Attach a rule to a control for automated compliance"
+    },
+    {
+      "name": "fetch_cc_rule_by_id",
+      "description": "Fetch rule details by rule ID"
+    },
+    {
+      "name": "fetch_cc_rule_by_name",
+      "description": "Fetch rule details by rule name"
+    },
+    {
+      "name": "publish_rule",
+      "description": "Publish a rule to make it available for execution"
+    },
+    {
+      "name": "fetch_assessments",
+      "description": "Fetch available assessments"
+    },
+    {
+      "name": "fetch_leaf_controls_of_an_assessment",
+      "description": "Get leaf-level controls from an assessment hierarchy"
+    },
+    {
+      "name": "verify_control_in_assessment",
+      "description": "Verify a control exists in a specific assessment"
+    },
+    {
+      "name": "check_applications_publish_status",
+      "description": "Check publication status of applications"
+    },
+    {
+      "name": "check_rule_publish_status",
+      "description": "Check publication status of a rule"
+    },
+    {
+      "name": "publish_application",
+      "description": "Publish an application"
+    },
+    {
+      "name": "list_assets",
+      "description": "List all available assets"
+    },
+    {
+      "name": "list_checks",
+      "description": "List all compliance checks"
+    },
+    {
+      "name": "get_asset_control_hierarchy",
+      "description": "Get control hierarchy structure for an asset"
+    },
+    {
+      "name": "add_check_to_asset",
+      "description": "Add a compliance check to an asset"
+    },
+    {
+      "name": "create_asset_and_check",
+      "description": "Create a new asset with associated checks"
+    },
+    {
+      "name": "schedule_asset_execution",
+      "description": "Schedule an asset for automated execution"
+    },
+    {
+      "name": "list_asset_schedules",
+      "description": "List scheduled asset executions"
+    },
+    {
+      "name": "delete_asset_schedule",
+      "description": "Delete an asset execution schedule"
+    },
+    {
+      "name": "suggest_control_config_citations",
+      "description": "Get citation suggestions for control configurations"
+    },
+    {
+      "name": "add_citation_to_asset_control",
+      "description": "Add a citation reference to an asset control"
+    },
+    {
+      "name": "verify_control_automation",
+      "description": "Verify control automation status"
+    },
+    {
+      "name": "fetch_cc_rules_list",
+      "description": "Fetch list of all compliance rules"
+    },
+    {
+      "name": "create_control_note",
+      "description": "Create a note on a control"
+    },
+    {
+      "name": "list_control_notes",
+      "description": "List notes for a control"
+    },
+    {
+      "name": "update_control_config_note",
+      "description": "Update a control configuration note"
+    },
+    {
+      "name": "get_tasks_summary",
+      "description": "Get summary of available tasks"
+    },
+    {
+      "name": "get_template_guidance",
+      "description": "Get guidance for task templates"
+    },
+    {
+      "name": "collect_template_input",
+      "description": "Collect inputs for a task template"
+    },
+    {
+      "name": "confirm_template_input",
+      "description": "Confirm collected template inputs"
+    },
+    {
+      "name": "upload_file",
+      "description": "Upload a file for task execution"
+    },
+    {
+      "name": "collect_parameter_input",
+      "description": "Collect parameter inputs for execution"
+    },
+    {
+      "name": "confirm_parameter_input",
+      "description": "Confirm parameter inputs"
+    },
+    {
+      "name": "prepare_input_collection_overview",
+      "description": "Prepare an overview of input collection"
+    },
+    {
+      "name": "verify_collected_inputs",
+      "description": "Verify all collected inputs before execution"
+    },
+    {
+      "name": "execute_task",
+      "description": "Execute a compliance task"
+    },
+    {
+      "name": "generate_design_notes_preview",
+      "description": "Preview generated design notes"
+    },
+    {
+      "name": "create_design_notes",
+      "description": "Create design notes for a rule"
+    },
+    {
+      "name": "fetch_rule_design_notes",
+      "description": "Fetch existing design notes for a rule"
+    },
+    {
+      "name": "generate_rule_readme_preview",
+      "description": "Preview generated README for a rule"
+    },
+    {
+      "name": "create_rule_readme",
+      "description": "Create README documentation for a rule"
+    },
+    {
+      "name": "update_rule_readme",
+      "description": "Update README documentation for a rule"
+    },
+    {
+      "name": "get_application_info",
+      "description": "Get application information"
+    },
+    {
+      "name": "fetch_execution_progress",
+      "description": "Track execution progress of a task"
+    },
+    {
+      "name": "fetch_output_file",
+      "description": "Fetch output file from an execution"
+    },
+    {
+      "name": "fetch_applications",
+      "description": "List all applications"
+    },
+    {
+      "name": "prepare_applications_for_execution",
+      "description": "Prepare applications for execution"
+    },
+    {
+      "name": "add_unique_identifier_to_task",
+      "description": "Add a unique identifier to a task"
+    },
+    {
+      "name": "check_rule_status",
+      "description": "Check current status of a rule"
+    },
+    {
+      "name": "fetch_rules_suggestions",
+      "description": "Get rule suggestions"
+    },
+    {
+      "name": "get_task_details",
+      "description": "Get detailed task information"
+    },
+    {
+      "name": "create_rule",
+      "description": "Create a new compliance rule"
+    },
+    {
+      "name": "fetch_rule",
+      "description": "Fetch rule details"
+    },
+    {
+      "name": "get_rules_summary",
+      "description": "Get summary of all rules"
+    },
+    {
+      "name": "execute_rule",
+      "description": "Execute a compliance rule"
+    },
+    {
+      "name": "configure_rule_output_schema",
+      "description": "Configure output schema for a rule"
+    },
+    {
+      "name": "update_rule",
+      "description": "Update an existing rule"
+    }
+  ],
+  "user_config": {
+    "ccow_host": {
+      "type": "string",
+      "title": "ComplianceCow Host",
+      "description": "Your ComplianceCow API host URL (e.g., https://your-tenant.compliancecow.com/api)",
+      "required": true,
+      "sensitive": false
+    },
+    "ccow_client_id": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "OAuth Client ID for ComplianceCow API authentication",
+      "required": true,
+      "sensitive": false
+    },
+    "ccow_client_secret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "OAuth Client Secret for ComplianceCow API authentication",
+      "required": true,
+      "sensitive": true
+    }
+  }
+}

@@ -1,0 +1,66 @@
+# Git and version control
+.git/
+.github/
+.gitignore
+
+# Python caches and build artifacts
+.pytest_cache/
+.ruff_cache/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+build/
+dist/
+cowmcpservice.egg-info/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+*.DS_Store
+Thumbs.db
+
+# Test files and directories
+test/
+tests/
+*_test.py
+test_*.py
+conftest.py
+pytest.ini
+.coverage
+coverage/
+htmlcov/
+reports/
+
+# Documentation drafts
+docs/**/*.draft.md
+
+# Development and temporary files
+*.log
+*.tmp
+*.bak
+.env
+.env.*
+!.env.example
+
+# Lock files (dependencies managed by uv)
+uv.lock
+poetry.lock
+Pipfile.lock
+
+# Test evidence and temporary data
+test_evidence.txt
+assets/
+
+# MCPB build outputs
+*.mcpb
+
+# Claude Code artifacts
+.claude/

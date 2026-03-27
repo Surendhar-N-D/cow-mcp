@@ -1,0 +1,159 @@
+{
+  "manifest_version": "0.3",
+  "name": "compliancecow-insights",
+  "display_name": "ComplianceCow Insights",
+  "version": "1.0.0",
+  "description": "Real-time compliance dashboards, asset inventory, and control framework visibility for ComplianceCow.",
+  "author": {
+    "name": "ComplianceCow",
+    "email": "support@compliancecow.com",
+    "url": "https://compliancecow.com"
+  },
+  "server": {
+    "type": "python",
+    "entry_point": "main.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "main.py"
+      ],
+      "env": {
+        "MCP_TOOLS_TO_BE_INCLUDED": "insights",
+        "CCOW_HOST": "${user_config.ccow_host}",
+        "CCOW_CLIENT_ID": "${user_config.ccow_client_id}",
+        "CCOW_CLIENT_SECRET": "${user_config.ccow_client_secret}"
+      }
+    }
+  },
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/compliancecow/cow-mcp.git"
+  },
+  "homepage": "https://compliancecow.com",
+  "documentation": "https://docs.compliancecow.com/mcp/insights",
+  "keywords": [
+    "compliance",
+    "dashboard",
+    "controls",
+    "frameworks",
+    "assets",
+    "governance",
+    "risk",
+    "ccf",
+    "compliancecow"
+  ],
+  "license": "MIT",
+  "long_description": "ComplianceCow Insights provides real-time visibility into your compliance posture through interactive dashboards, asset inventories, and control framework analytics. Monitor control status, track compliance percentages, identify overdue and non-compliant controls, and explore your cloud infrastructure assets with deep drill-down capabilities.\n\nKey capabilities:\n- Common Control Framework (CCF) dashboards with period-based filtering\n- Control status tracking: Completed, In Progress, Overdue, Pending\n- Framework-level compliance summaries and control details\n- Cloud asset inventory with resource type breakdowns\n- Compliance checks per resource with pass/fail analysis\n- Neo4j graph database queries for compliance evidence exploration",
+  "privacy_policies": [
+    "https://compliancecow.com/privacy"
+  ],
+  "tools": [
+    {
+      "name": "get_dashboard_review_periods",
+      "description": "Fetch available review periods for compliance dashboards"
+    },
+    {
+      "name": "get_dashboard_data",
+      "description": "Get dashboard summary for a compliance period including control status, compliance percentage, and framework breakdowns"
+    },
+    {
+      "name": "fetch_dashboard_framework_controls",
+      "description": "Retrieve detailed control-level data for a specific framework and review period"
+    },
+    {
+      "name": "fetch_dashboard_framework_summary",
+      "description": "Get framework dashboard summary for a compliance period"
+    },
+    {
+      "name": "get_dashboard_common_controls_details",
+      "description": "Get paginated control details with filters for compliance status, control status, priority, and category"
+    },
+    {
+      "name": "get_top_over_due_controls_detail",
+      "description": "Fetch controls with top overdue status for a compliance period"
+    },
+    {
+      "name": "get_top_non_compliant_controls_detail",
+      "description": "Fetch non-compliant controls with low compliance scores"
+    },
+    {
+      "name": "fetch_unique_node_data_and_schema",
+      "description": "Fetch Neo4j node data and schema for compliance graph queries"
+    },
+    {
+      "name": "execute_cypher_query",
+      "description": "Execute Cypher queries against the compliance graph database"
+    },
+    {
+      "name": "list_assets",
+      "description": "Get all cloud infrastructure assets"
+    },
+    {
+      "name": "fetch_assets_summary",
+      "description": "Get asset summary for a specific assessment run"
+    },
+    {
+      "name": "fetch_resource_types",
+      "description": "Get resource types with pagination for a given asset run"
+    },
+    {
+      "name": "fetch_checks",
+      "description": "Get compliance checks for a resource type with pagination"
+    },
+    {
+      "name": "fetch_resources",
+      "description": "Get resources for a resource type with compliance status"
+    },
+    {
+      "name": "fetch_resources_by_check_name",
+      "description": "Get resources filtered by a specific check name"
+    },
+    {
+      "name": "fetch_checks_summary",
+      "description": "Get compliance summary for checks including pass/fail breakdown"
+    },
+    {
+      "name": "fetch_resources_summary",
+      "description": "Get compliance summary for resources"
+    },
+    {
+      "name": "fetch_resources_by_check_name_summary",
+      "description": "Get compliance summary for resources filtered by check"
+    },
+    {
+      "name": "list_all_assessment_categories",
+      "description": "Get all assessment categories"
+    },
+    {
+      "name": "list_assessments",
+      "description": "Get assessments with optional filtering by category and name"
+    }
+  ],
+  "user_config": {
+    "ccow_host": {
+      "type": "string",
+      "title": "ComplianceCow Host",
+      "description": "Your ComplianceCow API host URL (e.g., https://your-tenant.compliancecow.com/api)",
+      "required": true,
+      "sensitive": false
+    },
+    "ccow_client_id": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "OAuth Client ID for ComplianceCow API authentication",
+      "required": true,
+      "sensitive": false
+    },
+    "ccow_client_secret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "OAuth Client Secret for ComplianceCow API authentication",
+      "required": true,
+      "sensitive": true
+    }
+  }
+}

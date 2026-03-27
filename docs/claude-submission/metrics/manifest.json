@@ -1,0 +1,197 @@
+{
+  "manifest_version": "0.3",
+  "name": "compliancecow-metrics",
+  "display_name": "ComplianceCow Metrics",
+  "version": "1.0.0",
+  "description": "Metrics assessment, tracking, and evidence management for ComplianceCow.",
+  "author": {
+    "name": "ComplianceCow",
+    "email": "support@compliancecow.com",
+    "url": "https://compliancecow.com"
+  },
+  "server": {
+    "type": "python",
+    "entry_point": "main.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "main.py"
+      ],
+      "env": {
+        "MCP_TOOLS_TO_BE_INCLUDED": "metrics",
+        "CCOW_HOST": "${user_config.ccow_host}",
+        "CCOW_CLIENT_ID": "${user_config.ccow_client_id}",
+        "CCOW_CLIENT_SECRET": "${user_config.ccow_client_secret}",
+        "METRICS_ASSESSMENT_NAME": "${user_config.metrics_assessment_name}",
+        "METRICS_CATEGORY_NAME": "${user_config.metrics_category_name}"
+      }
+    }
+  },
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/compliancecow/cow-mcp.git"
+  },
+  "homepage": "https://compliancecow.com",
+  "documentation": "https://docs.compliancecow.com/mcp/metrics",
+  "keywords": [
+    "compliance",
+    "metrics",
+    "kpi",
+    "evidence",
+    "tracking",
+    "analytics",
+    "compliancecow"
+  ],
+  "license": "MIT",
+  "long_description": "ComplianceCow Metrics provides comprehensive compliance metrics management. Track key performance indicators, manage evidence collection, create SQL-based evidence queries, and apply CEL expressions for metric calculations.\n\nKey capabilities:\n- Metrics assessment management and execution\n- Evidence sample data retrieval and analysis\n- SQL query evidence creation and validation\n- CEL expression support for metric calculations\n- Citation suggestions and attachment for metrics\n- Metrics notes and documentation\n- Source-to-target metric linking",
+  "privacy_policies": [
+    "https://compliancecow.com/privacy"
+  ],
+  "tools": [
+    {
+      "name": "get_metrics_assessment",
+      "description": "Get or create the metrics assessment"
+    },
+    {
+      "name": "list_assets",
+      "description": "List all available assets for metrics"
+    },
+    {
+      "name": "get_assets_data",
+      "description": "Get controls and evidence metadata for an asset"
+    },
+    {
+      "name": "get_asset_metrics_evidence_sample_data",
+      "description": "Get sample evidence records for selected metrics"
+    },
+    {
+      "name": "run_metrics_assessment",
+      "description": "Trigger a new metrics assessment run"
+    },
+    {
+      "name": "get_all_recent_assessment_run_details",
+      "description": "Get details of recent assessment runs"
+    },
+    {
+      "name": "get_all_metrics_of_run",
+      "description": "Get all metrics from an assessment run"
+    },
+    {
+      "name": "add_metric",
+      "description": "Add a new metric to the assessment"
+    },
+    {
+      "name": "update_metric",
+      "description": "Update an existing metric"
+    },
+    {
+      "name": "get_all_metrics_categories",
+      "description": "Get all metrics categories"
+    },
+    {
+      "name": "get_all_assessment_metrics",
+      "description": "Get all metrics for an assessment"
+    },
+    {
+      "name": "suggest_metrics_citations",
+      "description": "Get citation suggestions for metrics"
+    },
+    {
+      "name": "attach_citation_to_metrics",
+      "description": "Attach a citation to a metric"
+    },
+    {
+      "name": "fetch_metrics_source_summary",
+      "description": "Fetch summary of metrics sources"
+    },
+    {
+      "name": "get_metrics_evidence_sample_data",
+      "description": "Get evidence sample data for metrics"
+    },
+    {
+      "name": "validate_sql_query_and_cel",
+      "description": "Validate SQL query and CEL expression syntax"
+    },
+    {
+      "name": "create_sql_query_evidence",
+      "description": "Create SQL query-based evidence for metrics"
+    },
+    {
+      "name": "list_sql_query_evidence",
+      "description": "List SQL query evidence configurations"
+    },
+    {
+      "name": "update_sql_query_evidence",
+      "description": "Update SQL query evidence configuration"
+    },
+    {
+      "name": "add_cel_expression_to_metrics",
+      "description": "Add CEL expression for metric calculation"
+    },
+    {
+      "name": "update_cel_expression_to_metrics",
+      "description": "Update CEL expression for a metric"
+    },
+    {
+      "name": "get_cel_expression_for_metrics",
+      "description": "Get CEL expression configured for a metric"
+    },
+    {
+      "name": "create_metrics_note",
+      "description": "Create a note on a metric"
+    },
+    {
+      "name": "list_metrics_notes",
+      "description": "List notes for a metric"
+    },
+    {
+      "name": "update_metrics_note",
+      "description": "Update a metrics note"
+    },
+    {
+      "name": "link_source_metrics_to_target_metric",
+      "description": "Link source metrics to a target metric"
+    }
+  ],
+  "user_config": {
+    "ccow_host": {
+      "type": "string",
+      "title": "ComplianceCow Host",
+      "description": "Your ComplianceCow API host URL (e.g., https://your-tenant.compliancecow.com/api)",
+      "required": true,
+      "sensitive": false
+    },
+    "ccow_client_id": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "OAuth Client ID for ComplianceCow API authentication",
+      "required": true,
+      "sensitive": false
+    },
+    "ccow_client_secret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "OAuth Client Secret for ComplianceCow API authentication",
+      "required": true,
+      "sensitive": true
+    },
+    "metrics_assessment_name": {
+      "type": "string",
+      "title": "Metrics Assessment Name",
+      "description": "Name of the metrics assessment (default: Metric Manager)",
+      "required": false,
+      "sensitive": false
+    },
+    "metrics_category_name": {
+      "type": "string",
+      "title": "Metrics Category Name",
+      "description": "Name of the metrics category (default: Metric Manager)",
+      "required": false,
+      "sensitive": false
+    }
+  }
+}
