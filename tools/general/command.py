@@ -373,11 +373,13 @@ CMD_TIMEOUT = 30
 async def execute_shell_command(cmd: str) -> str:
     """
     Run a shell command asynchronously with:
-      - Non-root user (sudo -u mcpuser)
+      - Non-root user
       - Resource limits
       - Output limited to MAX_OUTPUT_CHARS
       - Timeout defined by CMD_TIMEOUT
-      - Firejail isolation (optional)
+      - bwrap isolation (optional)
+      - Each cmd is isolated, a resource created for that cmd and destroyed after execution
+      - Only safe curl & python3 are allowed commands
     Returns combined stdout+stderr truncated to MAX_OUTPUT_CHARS
     """
 
@@ -405,37 +407,24 @@ async def execute_shell_command(cmd: str) -> str:
     #     "-c",
     #     cmd
     # ]
-    full_cmd = [
+    bwrap_cmd = [
         "bwrap",
-        "--unshare-all",           # Full isolation: user, pid, net, uts, ipc, cgroup, mount
         "--die-with-parent",
-        "--new-session",
-        "--clearenv",              # ← Critical: wipes ALL host environment variables
-        "--setenv", "PATH", "/usr/bin:/bin:/usr/sbin",
-        "--setenv", "HOME", "/tmp",
-        "--setenv", "LANG", "C.UTF-8",
-        # Add any other safe env vars here, e.g. "--setenv", "PYTHONPATH", "/allowed/path"
-
-        # Filesystem: minimal & private
-        "--ro-bind", "/usr", "/usr",      # binaries + libs (read-only)
-        "--ro-bind", "/lib", "/lib",
-        "--ro-bind-try", "/lib64", "/lib64",
+        "--clearenv",
+        "--setenv", "PATH", "/usr/bin:/bin:/usr/local/bin",
+        "--tmpfs", "/tmp",
+        "--ro-bind", "/usr", "/usr",
         "--ro-bind", "/bin", "/bin",
-        "--ro-bind", "/sbin", "/sbin",
+        "--ro-bind", "/lib", "/lib",
+        "--ro-bind", "/usr/local", "/usr/local",
+        "--ro-bind", "/etc", "/etc",
         "--proc", "/proc",
         "--dev", "/dev",
-        "--tmpfs", "/tmp",                # private writable tmp
-        "--tmpfs", "/run",
-        "--tmpfs", "/var",                # prevents host var leakage
-
-        # Optional: give a writable workspace if needed
-        # "--bind", "/path/to/allowed/workspace", "/workspace",
-
-        "bash", "-c", cmd
-    ]
+        "--"
+    ] + cmd
 
     process = await asyncio.create_subprocess_exec(
-        *full_cmd,
+        *bwrap_cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         preexec_fn=limit_resources
