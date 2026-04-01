@@ -394,16 +394,44 @@ async def execute_shell_command(cmd: str) -> str:
         resource.setrlimit(resource.RLIMIT_NOFILE, (16, 16))
 
     # Firejail + non-root execution
+    # full_cmd = [
+    #     "sudo", "-u", "mcpuser",
+    #     "firejail",
+    #     "--quiet",
+    #     "--private",
+    #     "--net=all",
+    #     "--caps.drop=all",
+    #     "bash",
+    #     "-c",
+    #     cmd
+    # ]
     full_cmd = [
-        "sudo", "-u", "mcpuser",
-        "firejail",
-        "--quiet",
-        "--private",
-        "--net=all",
-        "--caps.drop=all",
-        "bash",
-        "-c",
-        cmd
+        "bwrap",
+        "--unshare-all",           # Full isolation: user, pid, net, uts, ipc, cgroup, mount
+        "--die-with-parent",
+        "--new-session",
+        "--clearenv",              # ← Critical: wipes ALL host environment variables
+        "--setenv", "PATH", "/usr/bin:/bin:/usr/sbin",
+        "--setenv", "HOME", "/tmp",
+        "--setenv", "LANG", "C.UTF-8",
+        # Add any other safe env vars here, e.g. "--setenv", "PYTHONPATH", "/allowed/path"
+
+        # Filesystem: minimal & private
+        "--ro-bind", "/usr", "/usr",      # binaries + libs (read-only)
+        "--ro-bind", "/lib", "/lib",
+        "--ro-bind-try", "/lib64", "/lib64",
+        "--ro-bind", "/bin", "/bin",
+        "--ro-bind", "/sbin", "/sbin",
+        "--proc", "/proc",
+        "--dev", "/dev",
+        "--tmpfs", "/tmp",                # private writable tmp
+        "--tmpfs", "/run",
+        "--tmpfs", "/var",                # prevents host var leakage
+
+        # Optional: give a writable workspace if needed
+        # "--bind", "/path/to/allowed/workspace", "/workspace",
+
+        "bash", "-c", cmd
     ]
 
     process = await asyncio.create_subprocess_exec(
