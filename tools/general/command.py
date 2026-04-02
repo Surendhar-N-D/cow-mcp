@@ -420,7 +420,7 @@ async def execute_shell_command(cmd: str) -> str:
         "--ro-bind", "/etc", "/etc",
         "--proc", "/proc",
         "--dev", "/dev",
-        "--"
+        "--",
         "bash", "-c", cmd 
     ]
 
