@@ -421,6 +421,7 @@ async def execute_shell_command(cmd: str) -> str:
         "--proc", "/proc",
         "--dev", "/dev",
         "--"
+        "bash", "-c", cmd 
     ] + cmd
 
     process = await asyncio.create_subprocess_exec(
