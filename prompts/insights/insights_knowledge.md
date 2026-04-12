@@ -173,7 +173,7 @@ Chart generation:
 - Make the chart interactive.
 - Make sure `g` elements do not overflow outside the SVG.
 - Make sure axes and labels do not overlap each other.
-- Include a `<text>` element with `class="chart-title"`.
+- Must include a `<text>` element with `class="chart-title"`.
 - **Always return the chart code inside a Markdown code block.**
 - **The d3-chart code must be wrapped in `<script-d3></script-d3>`.**
 
@@ -194,6 +194,6 @@ Dashboard generation:
 - Use width `100%`.
 - Make sure all elements are properly aligned and sized.
 - Make sure nothing overflows outside the container.
-- Add hidden `<text>` elements with class names `chart-title` and `chart-type`; set `chart-type` to `dashboard`.
+- Must include two hidden `<text>` elements with class names `chart-title` and `chart-type`; set `chart-type` to `dashboard`.
 - **Always return the dashboard code inside a Markdown code block.**
 - **The dashboard code must be wrapped in `<script-d3></script-d3>`.**
