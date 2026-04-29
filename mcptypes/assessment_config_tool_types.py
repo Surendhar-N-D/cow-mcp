@@ -49,7 +49,7 @@ class ControlVO(BaseModel):
     activationStatus: Optional[str] = None
     leafControl: Optional[bool] = None
     isAutomated: Optional[bool] = None
-    citations: Optional[List[CitationVO]] = None
+    citations: Optional[List[CitationVO]] = []
     reportingLevelControl: Optional[bool] = None
     # dueDays: Optional[int] = None
     # AssignTo: Optional[List[str]] = None
