@@ -1225,3 +1225,29 @@ async def trigger_workflow(
         logger.error(traceback.format_exc())
         logger.error("trigger_workflow error: {}\n".format(e))
         return "Facing internal error"
+
+
+@mcp.tool(utils.tool_annotations("List Workflow Blueprints", read_only = True))
+async def list_workflow_blueprints(ctx: Context | None = None) -> list | str:
+    """
+    Lists the available workflow blueprints that can be used to create workflows in the system. Returns predefined workflow configurations that are not yet instantiated as workflows.
+   
+    Returns:
+        - List of workflow configuration items : Each item contains workflow
+        - Error message (str): If retrieval fails or an error occurs
+    
+    """
+    try:
+        logger.info("list_workflow_blueprints: \n")
+        output=await utils.make_GET_API_call_to_CCow("/pc-api/v1/workflows", ctx)
+        error = utils.build_structured_error(output, "list_workflow_blueprints")
+        if error:
+            logger.error(f"list_workflow_blueprints error: {output}\n")
+            return {"success": False, "error": error}
+        
+        return output
+
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        logger.error("list_workflow_blueprints error: {}\n".format(e))
+        return {"success": False, "error": f"Unexpected error list workflow blueprints: {e}"}
