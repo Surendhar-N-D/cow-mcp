@@ -18,6 +18,8 @@ from mcptypes import workflow_tools_type as workflow_vo
 from mcptypes.graph_tool_types import UniqueNodeDataVO
 from mcptypes.assistant_tool_types import ControlSourceSummaryResponseVO, ControlSourceSummaryVO
 from fastmcp import Context
+from utils import assistant as assistant_utils
+
 
 from toon_format import encode
 
@@ -1006,6 +1008,55 @@ async def suggest_asset_controls(
         logger.error(traceback.format_exc())
         logger.error("suggest_asset_controls error: {}\n".format(e))
         return {"success": False, "error": f"Unexpected error suggesting asset controls: {e}"}
+
+@mcp.tool()
+async def l2_link_control_to_l3_control(
+    l2LeafControlId: str,
+    l3targetControlId: str,
+    ctx: Context | None = None
+) -> dict[str, Any]:
+    """
+    Link an L1 asset leaf control to an L2 target assessment control.
+
+    Args:
+        l2LeafControlId (str): Control ID of the L1 asset leaf control.
+        l3targetControlId (str): Control ID of the target L2 assessment control.
+
+    Returns:
+        dict:
+            - success (bool): Indicates if the linking operation was successful.
+            - l2LeafControlId (str): L2 leaf control ID.
+            - L3l3targetControlId (str): L3 target control ID.
+            - message (str): Informative status message.
+    """
+    try:
+        logger.info(f"l1_link_control_to_l2_control: l2LeafControlId={l2LeafControlId}, l3targetControlId={l3targetControlId}\n")
+        if not l2LeafControlId or not str(l2LeafControlId).strip():
+            return {"success": False, "error": "l2LeafControlId is required and cannot be empty."}
+        if not l3targetControlId or not str(l3targetControlId).strip():
+            return {"success": False, "error": "l3targetControlId is required and cannot be empty."}
+
+        source_id = str(l2LeafControlId).strip()
+        target_id = str(l3targetControlId).strip()
+
+        output = await assistant_utils.link_control_api(source_id, target_id, ctx=ctx)
+        err = utils.handle_error_response(output, "link_control_api")
+        if err:
+            return err
+
+
+        return {
+            "success": True,
+            "sourceControlId": source_id,
+            "l3targetControlId": target_id,
+            "message": f"Successfully linked L2 control '{source_id}' to L3 control '{target_id}'."
+        }
+    
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        logger.error(f"l1_link_control_to_l2_control error: {e}\n")
+        return {"success": False, "error": f"Unexpected error linking control: {e}"}
+
 
 
 @mcp.tool() 
@@ -2802,6 +2853,7 @@ async def create_control_config(
     controlName: str,
     controlDescription: str,
     controlCategory: str,
+    displayable: str| None = None,
     entityClass: str | None = None,
     entities: list[str] | None = None,
     controlContext: str | None = None,
@@ -2822,6 +2874,7 @@ async def create_control_config(
         controlName (str): Control name (required).
         controlDescription (str): Control description (required).
         controlCategory (str): Parent control category name (required).
+        displayable (str): str| None = None,
         entityClass (str, optional): Entity class name.
         entities (list[str], optional): List of entity names.
         controlContext (str, optional): Additional control context.
@@ -2948,72 +3001,77 @@ async def create_control_config(
             logger.error(f"create_control_config: Error fetching plan controls: {ce}\n")
 
         # Step 3: Find or Create Parent Control
-        parent_id = None
-        parent_alias = None
 
-        for ctrl in existing_controls:
-            if isinstance(ctrl, dict):
-                c_name = (ctrl.get("name") or "").strip().lower()
-                if c_name == category_name.lower():
-                    parent_id = ctrl.get("id")
-                    parent_alias = str(ctrl.get("alias") or ctrl.get("displayable") or "1")
-                    break
+        child_alias = displayable if displayable else None
 
-        if not parent_id:
-            # Determine incremented parent alias (1, 2, 3, ...)
-            parent_nums = []
+        if not child_alias:
+
+            parent_id = None
+            parent_alias = None
+
             for ctrl in existing_controls:
                 if isinstance(ctrl, dict):
-                    # Top-level control if parentId is empty/null or alias is simple integer
-                    p_id = ctrl.get("parentId")
-                    alias_val = str(ctrl.get("alias") or ctrl.get("displayable") or "")
-                    if not p_id and alias_val.isdigit():
-                        parent_nums.append(int(alias_val))
+                    c_name = (ctrl.get("name") or "").strip().lower()
+                    if c_name == category_name.lower():
+                        parent_id = ctrl.get("id")
+                        parent_alias = str(ctrl.get("alias") or ctrl.get("displayable") or "1")
+                        break
 
-            next_parent_num = (max(parent_nums) + 1) if parent_nums else 1
-            parent_alias = str(next_parent_num)
+            if not parent_id:
+                # Determine incremented parent alias (1, 2, 3, ...)
+                parent_nums = []
+                for ctrl in existing_controls:
+                    if isinstance(ctrl, dict):
+                        # Top-level control if parentId is empty/null or alias is simple integer
+                        p_id = ctrl.get("parentId")
+                        alias_val = str(ctrl.get("alias") or ctrl.get("displayable") or "")
+                        if not p_id and alias_val.isdigit():
+                            parent_nums.append(int(alias_val))
 
-            parent_payload = {
-                "name": category_name,
-                "description": category_name,
-                "displayable": parent_alias,
-                "alias": parent_alias,
-                "planId": str(assessment_id),
-                "isPreRequisite": False
-            }
+                next_parent_num = (max(parent_nums) + 1) if parent_nums else 1
+                parent_alias = str(next_parent_num)
 
-            logger.debug(f"create_control_config parent payload: {json.dumps(parent_payload)}\n")
-            parent_resp = await utils.make_API_call_to_CCow_and_get_response(
-                constants.URL_PLAN_CONTROLS,
-                "POST",
-                parent_payload,
-                ctx=ctx
-            )
+                parent_payload = {
+                    "name": category_name,
+                    "description": category_name,
+                    "displayable": parent_alias,
+                    "alias": parent_alias,
+                    "planId": str(assessment_id),
+                    "isPreRequisite": False
+                }
 
-            if isinstance(parent_resp, str):
-                return {"success": False, "error": parent_resp}
-            if isinstance(parent_resp, dict) and "Message" in parent_resp:
-                return {"success": False, "error": parent_resp}
+                logger.debug(f"create_control_config parent payload: {json.dumps(parent_payload)}\n")
+                parent_resp = await utils.make_API_call_to_CCow_and_get_response(
+                    constants.URL_PLAN_CONTROLS,
+                    "POST",
+                    parent_payload,
+                    ctx=ctx
+                )
 
-            if isinstance(parent_resp, dict) and parent_resp.get("id"):
-                parent_id = parent_resp.get("id")
-            else:
-                return {"success": False, "error": f"Failed to create parent control: {parent_resp}"}
+                if isinstance(parent_resp, str):
+                    return {"success": False, "error": parent_resp}
+                if isinstance(parent_resp, dict) and "Message" in parent_resp:
+                    return {"success": False, "error": parent_resp}
 
-        # Step 4: Create Child Control under parent (alias: 1.1, 1.2, 2.1, etc.)
-        child_suffixes = []
-        if parent_id and parent_alias:
-            for ctrl in existing_controls:
-                if isinstance(ctrl, dict):
-                    c_parent = ctrl.get("parentId")
-                    c_alias = str(ctrl.get("alias") or ctrl.get("displayable") or "")
-                    if (c_parent and c_parent == parent_id) or c_alias.startswith(f"{parent_alias}."):
-                        parts = c_alias.split(".")
-                        if len(parts) == 2 and parts[0] == parent_alias and parts[1].isdigit():
-                            child_suffixes.append(int(parts[1]))
+                if isinstance(parent_resp, dict) and parent_resp.get("id"):
+                    parent_id = parent_resp.get("id")
+                else:
+                    return {"success": False, "error": f"Failed to create parent control: {parent_resp}"}
 
-        next_child_suffix = (max(child_suffixes) + 1) if child_suffixes else 1
-        child_alias = f"{parent_alias}.{next_child_suffix}"
+            # Step 4: Create Child Control under parent (alias: 1.1, 1.2, 2.1, etc.)
+            child_suffixes = []
+            if parent_id and parent_alias:
+                for ctrl in existing_controls:
+                    if isinstance(ctrl, dict):
+                        c_parent = ctrl.get("parentId")
+                        c_alias = str(ctrl.get("alias") or ctrl.get("displayable") or "")
+                        if (c_parent and c_parent == parent_id) or c_alias.startswith(f"{parent_alias}."):
+                            parts = c_alias.split(".")
+                            if len(parts) == 2 and parts[0] == parent_alias and parts[1].isdigit():
+                                child_suffixes.append(int(parts[1]))
+
+            next_child_suffix = (max(child_suffixes) + 1) if child_suffixes else 1
+            child_alias = f"{parent_alias}.{next_child_suffix}"
 
         child_payload = {
             "name": str(controlName).strip(),
@@ -3021,7 +3079,7 @@ async def create_control_config(
             "displayable": child_alias,
             "alias": child_alias,
             "planId": str(assessment_id),
-            "parentId": str(parent_id),
+            # "parentId": str(parent_id),
             "isPreRequisite": False
         }
 

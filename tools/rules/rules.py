@@ -17,7 +17,7 @@ from constants import constants
 from mcpconfig.config import mcp
 from mcptypes import exception
 from mcptypes.rule_type import TaskVO
-from utils import rule, wsutils
+from utils import assistant as assistant_utils, rule, wsutils
 from utils.debug import logger
 from fastmcp import Context
 from utils import utils
@@ -1261,7 +1261,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
     @mcp.tool()
     async def create_asset_and_check(assetName: str, controlName: str, checkName: str, checkDescription: str, ctx: Context | None = None) -> dict:
         """
-            Create a new asse with an initial control and check structure.
+            Create a new asset with an initial control and check structure.
             The asset will be created with a hierarchical structure: asset -> parentcontrol -> control -> check.
 
             Args:
@@ -1377,9 +1377,611 @@ if constants.ENABLE_CCOW_API_TOOLS:
 
         except Exception as e:
             logger.error(traceback.format_exc())
-            logger.error("create_asset error: {}\n".format(e))
+
+    @mcp.tool()
+    async def check_asset_exist(assetName: str, ctx: Context | None = None) -> dict[str, Any]:
+        """
+        Check if an asset exists by asset name(case-insensitive match).
+        Returns the asset name and its ID if found.
+
+        Args:
+            assetName (str): Name of the asset to check (case-insensitive match).
+
+        Returns:
+            dict:
+                - success (bool): Indicates if the operation completed successfully.
+                - exists (bool): Whether the asset exists.
+                - id (str | None): Asset ID if exists, None otherwise.
+                - name (str | None): Matched asset name if exists, None otherwise.
+                - message (str): Informative status message.
+        """
+        try:
+            logger.info(f"check_asset_exist: assetName={assetName}\n")
+            if not assetName or not str(assetName).strip():
+                return {"success": False, "exists": False, "error": "assetName is required and cannot be empty."}
+
+            asset_name_clean = str(assetName).strip().lower()
+            output = await assistant_utils.fetch_all_assets_api(ctx=ctx)
+
+            if isinstance(output, str):
+                logger.error(f"check_asset_exist error: {output}\n")
+                return {"success": False, "exists": False, "error": output}
+
+            if isinstance(output, dict) and "error" in output:
+                logger.error(f"check_asset_exist error: {output.get('error')}\n")
+                return {"success": False, "exists": False, "error": output.get("error")}
+
+            items = output.get("items", []) if isinstance(output, dict) else (output if isinstance(output, list) else [])
+            for item in items:
+                if isinstance(item, dict):
+                    curr_name = str(item.get("name", "")).strip()
+                    if curr_name.lower() == asset_name_clean:
+                        asset_id = item.get("id", "")
+                        return {
+                            "success": True,
+                            "exists": True,
+                            "id": asset_id,
+                            "name": curr_name,
+                            "message": f"Asset '{curr_name}' exists with ID '{asset_id}'."
+                        }
+
+            return {
+                "success": True,
+                "exists": False,
+                "id": None,
+                "name": None,
+                "message": f"Asset '{assetName}' does not exist."
+            }
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f"check_asset_exist error: {e}\n")
+            return {"success": False, "exists": False, "error": f"Unexpected error checking asset existence: {e}"}
+
+    @mcp.tool(annotations=utils.tool_annotations("Create Asset", read_only=False))
+    async def l1_create_asset(assetName: str, ctx: Context | None = None) -> dict[str, Any]:
+        """
+        Create a asset and return its created ID.
+
+        Args:
+            assetName (str): Name of the asset to create.
+
+        Returns:
+            dict:
+                - success (bool): Indicates if the asset was created successfully.
+                - id (str): ID of the created asset.
+                - name (str): Name of the created asset.
+                - message (str): Informative status message.
+        """
+        try:
+            logger.info(f"l1_create_asset: assetName={assetName}\n")
+            if not assetName or not str(assetName).strip():
+                return {"success": False, "error": "assetName is required and cannot be empty."}
+
+            asset_name = str(assetName).strip()
+            output = await assistant_utils.create_asset_api(asset_name, ctx=ctx)
+
+            if isinstance(output, str):
+                logger.error(f"l1_create_asset error: {output}\n")
+                return {"success": False, "error": output}
+
+            if isinstance(output, dict):
+                if "Message" in output:
+                    logger.error(f"l1_create_asset error: {output}\n")
+                    return {"success": False, "error": output.get("Message")}
+                if "error" in output:
+                    logger.error(f"l1_create_asset error: {output.get('error')}\n")
+                    return {"success": False, "error": output.get("error")}
+
+            asset_id = output.get("id") if isinstance(output, dict) else None
+            if not asset_id:
+                return {"success": False, "error": f"Failed to create asset: no ID returned in response: {output}"}
+
+            return {
+                "success": True,
+                "id": asset_id,
+                "name": asset_name,
+                "message": f"Asset '{asset_name}' created successfully with ID '{asset_id}'."
+            }
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f"l1_create_asset error: {e}\n")
             return {"success": False, "error": f"Unexpected error creating asset: {e}"}
 
+    @mcp.tool(annotations=utils.tool_annotations("Check Control Exist", read_only=True))
+    async def l1_check_control_exist(assetId: str, displayable: str, ctx: Context | None = None) -> dict[str, Any]:
+        """
+        Check if a control exists in an asset by its displayable and return its control ID if found.
+
+        Args:
+            assetId (str): ID of the asset.
+            displayable (str): Displayable control number/identifier (e.g., '1', '1.1', '1.1.1').
+
+        Returns:
+            dict:
+                - success (bool): Indicates if the check completed successfully.
+                - exists (bool): Whether the control exists.
+                - id (str | None): Control ID if found, None otherwise.
+                - controlId (str | None): Same as id.
+                - displayable (str | None): Matched displayable number.
+                - name (str | None): Control name if found.
+                - message (str): Informative status message.
+        """
+        try:
+            logger.info(f"l1_check_control_exist: assetId={assetId}, displayable={displayable}\n")
+            if not assetId or not str(assetId).strip():
+                return {"success": False, "exists": False, "error": "assetId is required and cannot be empty."}
+            if not displayable or not str(displayable).strip():
+                return {"success": False, "exists": False, "error": "displayable is required and cannot be empty."}
+
+            asset_id = str(assetId).strip()
+            disp_target = str(displayable).strip()
+
+            output = await assistant_utils.get_plan_controls_api(asset_id, displayable=disp_target, ctx=ctx)
+
+            items = []
+            if isinstance(output, dict) and "items" in output and isinstance(output["items"], list):
+                items = output["items"]
+            elif isinstance(output, list):
+                items = output
+
+            item = next(iter(items), None)
+
+            if isinstance(item, dict):
+                cid = item.get("id")
+                cname = item.get("name")
+                return {
+                    "success": True,
+                    "exists": True,
+                    "id": cid,
+                    "displayable": disp_target,
+                    "name": cname,
+                    "message": f"Control '{disp_target}' exists in asset '{asset_id}' with ID '{cid}'."
+                }
+                    
+            return {
+                "success": True,
+                "exists": False,
+                "id": None,
+                "message": f"Control '{disp_target}' does not exist in asset '{asset_id}'."
+            }
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f"l1_check_control_exist error: {e}\n")
+            return {"success": False, "exists": False, "error": f"Unexpected error checking control existence: {e}"}
+
+    @mcp.tool()
+    async def l1_create_control(
+        name: str,
+        description: str,
+        displayable: str,
+        assetId: str,
+        ctx: Context | None = None
+    ) -> dict[str, Any]:
+        """
+        Create a control in an asset following a parent-child hierarchy.
+
+        Controls follow a parent-child hierarchy: a control containing another control is a parent,
+        and the last control is the child/leaf. For example, 1 -> 1.1 -> 1.1.1, where 1 and 1.1 are parents
+        and 1.1.1 is the leaf. A child can be added only under an existing parent; otherwise, create the parent first.
+        If a control is added below a leaf, the existing leaf becomes a parent and the new control becomes the leaf.
+        When a leaf becomes a parent, its existing leaf-specific configurations, such as rules, are removed.
+        Rules and similar configurations should only be attached to leaf controls.
+
+        Args:
+            name (str): Control name.
+            description (str): Control description.
+            displayable (str): Displayable control identifier (e.g., '1', '1.1', '1.1.1').
+            assetId (str): Asset ID.
+
+        Returns:
+            dict:
+                - success (bool): Operation success status.
+                - id (str): ID of the created control.
+                - displayable (str): Displayable identifier.
+                - name (str): Control name.
+                - assetId (str): Asset ID.
+                - message (str): Informative status message.
+        """
+        try:
+            logger.info(f"l1_create_control: name={name}, displayable={displayable}, assetId={assetId}\n")
+            if not assetId or not str(assetId).strip():
+                return {"success": False, "error": "assetId is required and cannot be empty."}
+            if not displayable or not str(displayable).strip():
+                return {"success": False, "error": "displayable is required and cannot be empty."}
+            if not name or not str(name).strip():
+                return {"success": False, "error": "name is required and cannot be empty."}
+
+            asset_id = str(assetId).strip()
+            disp_target = str(displayable).strip()
+            ctrl_name = str(name).strip()
+            ctrl_desc = str(description).strip()
+
+            # Now create the target control
+            target_payload = {
+                "name": ctrl_name,
+                "description": ctrl_desc,
+                "displayable": disp_target,
+                "alias": disp_target,
+                "planId": asset_id,
+                "isPreRequisite": False
+            }
+
+            target_resp = await assistant_utils.create_plan_control_api(target_payload, ctx=ctx)
+            err = utils.handle_error_response(target_resp, "l1_create_control:create_target_control")
+            if err:
+                return err
+
+            target_id = target_resp.get("id") if isinstance(target_resp, dict) else None
+            if not target_id:
+                return {"success": False, "error": f"Failed to create target control: {target_resp}"}
+
+            return {
+                "success": True,
+                "id": target_id,
+                "displayable": disp_target,
+                "name": ctrl_name,
+                "assetId": asset_id,
+                "message": f"Control '{disp_target}' created successfully with ID '{target_id}'."
+            }
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f"l1_create_control error: {e}\n")
+            return {"success": False, "error": f"Unexpected error creating control: {e}"}
+
+    @mcp.tool()
+    async def l1_rule_exist_check(assetId: str, controlId: str, ctx: Context | None = None) -> dict[str, Any]:
+        """
+        Check if a rule exists for a specific control in an asset.
+        If a rule exists, returns the rule name and rule ID.
+
+        Args:
+            assetId (str): ID of the asset containing the control.
+            controlId (str): ID of the control to check.
+
+        Returns:
+            dict:
+                - success (bool): Indicates if the check completed successfully.
+                - exists (bool): Whether a rule is attached to the control.
+                - ruleName (str | None): Rule name if attached, None otherwise.
+                - ruleId (str | None): Rule ID if attached, None otherwise.
+                - controlId (str): Control ID.
+                - assetId (str): Asset ID.
+                - message (str): Informative status message.
+        """
+        try:
+            logger.info(f"l1_rule_exist_check: assetId={assetId}, controlId={controlId}\n")
+            if not assetId or not str(assetId).strip():
+                return {"success": False, "exists": False, "error": "assetId is required and cannot be empty."}
+            if not controlId or not str(controlId).strip():
+                return {"success": False, "exists": False, "error": "controlId is required and cannot be empty."}
+
+            control_id = str(controlId).strip()
+            asset_id = str(assetId).strip()
+
+            ctrl_resp = await assistant_utils.get_control_details_api(control_id, ctx=ctx)
+            if isinstance(ctrl_resp, str) or (isinstance(ctrl_resp, dict) and "error" in ctrl_resp):
+                return {"success": False, "exists": False, "error": f"Failed to retrieve control details for {control_id}: {ctrl_resp}"}
+
+            rule_id = ctrl_resp.get("ruleId") if isinstance(ctrl_resp, dict) else None
+
+            if not rule_id or str(rule_id).strip() in ("", "None", "null"):
+                return {
+                    "success": True,
+                    "exists": False,
+                    "ruleName": None,
+                    "id": None,
+                    "ruleId": None,
+                    "controlId": control_id,
+                    "assetId": asset_id,
+                    "message": f"No rule attached to control '{control_id}' in asset '{asset_id}'."
+                }
+
+            rule_id_str = str(rule_id).strip()
+            rule_name = None
+            if isinstance(ctrl_resp.get("rule"), dict) and ctrl_resp["rule"].get("name"):
+                rule_name = ctrl_resp["rule"]["name"]
+
+            if not rule_name:
+                rule_details = rule.fetch_cc_rule_by_id(rule_id_str, ctx)
+                if isinstance(rule_details, dict):
+                    rule_name = rule_details.get("name") or rule_details.get("meta", {}).get("name")
+
+            return {
+                "success": True,
+                "exists": True,
+                "ruleName": rule_name,
+                "ruleId": rule_id_str,
+                "controlId": control_id,
+                "assetId": asset_id,
+                "message": f"Rule '{rule_name}' (ID: '{rule_id_str}') exists on control '{control_id}'."
+            }
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f"l1_rule_exist_check error: {e}\n")
+            return {"success": False, "exists": False, "error": f"Unexpected error checking rule existence: {e}"}
+
+    @mcp.tool()
+    async def l1_link_control_to_l2_control(
+        assetLeafControlId: str,
+        targetControlId: str,
+        ctx: Context | None = None
+    ) -> dict[str, Any]:
+        """
+        Link an L1 asset leaf control to an L2 target assessment control.
+
+        Args:
+            assetLeafControlId (str): Control ID of the L1 asset leaf control.
+            targetControlId (str): Control ID of the target L2 assessment control.
+
+        Returns:
+            dict:
+                - success (bool): Indicates if the linking operation was successful.
+                - sourceControlId (str): L1 leaf control ID.
+                - targetControlId (str): L2 target control ID.
+                - message (str): Informative status message.
+        """
+        try:
+            logger.info(f"l1_link_control_to_l2_control: assetLeafControlId={assetLeafControlId}, targetControlId={targetControlId}\n")
+            if not assetLeafControlId or not str(assetLeafControlId).strip():
+                return {"success": False, "error": "assetLeafControlId is required and cannot be empty."}
+            if not targetControlId or not str(targetControlId).strip():
+                return {"success": False, "error": "targetControlId is required and cannot be empty."}
+
+            source_id = str(assetLeafControlId).strip()
+            target_id = str(targetControlId).strip()
+
+            output = await assistant_utils.link_control_api(source_id, target_id, ctx=ctx)
+            err = utils.handle_error_response(output, "link_control_api")
+            if err:
+                return err
+
+
+            return {
+                "success": True,
+                "sourceControlId": source_id,
+                "targetControlId": target_id,
+                "message": f"Successfully linked L1 control '{source_id}' to L2 control '{target_id}'."
+            }
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f"l1_link_control_to_l2_control error: {e}\n")
+            return {"success": False, "error": f"Unexpected error linking control: {e}"}
+
+    @mcp.tool()
+    async def check_l2_assessment_exist(assessmentName: str, ctx: Context | None = None) -> dict[str, Any]:
+        """
+        Check if an L2 assessment exists in ComplianceCow by assessment name.
+
+        Fetches available assessments and performs a case-insensitive match against assessmentName.
+        Excludes integration assets (L1) to specifically match L2 assessments.
+        Returns the assessment name and its ID if found.
+
+        Args:
+            assessmentName (str): Name of the L2 assessment to check.
+
+        Returns:
+            dict:
+                - success (bool): Indicates if the operation completed successfully.
+                - exists (bool): Whether the L2 assessment exists.
+                - id (str | None): Assessment ID if exists, None otherwise.
+                - name (str | None): Matched assessment name if exists, None otherwise.
+                - categoryName (str | None): Category name if exists, None otherwise.
+                - message (str): Informative status message.
+        """
+        try:
+            logger.info(f"check_l2_assessment_exist: assessmentName={assessmentName}\n")
+            if not assessmentName or not str(assessmentName).strip():
+                return {"success": False, "exists": False, "error": "assessmentName is required and cannot be empty."}
+
+            assessment_name_clean = str(assessmentName).strip().lower()
+            output = await assistant_utils.fetch_all_assessments_api(name_contains=str(assessmentName).strip(), ctx=ctx)
+
+            if isinstance(output, str):
+                logger.error(f"check_l2_assessment_exist error: {output}\n")
+                return {"success": False, "exists": False, "error": output}
+
+            if isinstance(output, dict) and "error" in output:
+                logger.error(f"check_l2_assessment_exist error: {output.get('error')}\n")
+                return {"success": False, "exists": False, "error": output.get("error")}
+
+            items = output.get("items", []) if isinstance(output, dict) else (output if isinstance(output, list) else [])
+
+            # Check matching items (excluding type="integration" which are L1 assets)
+            for item in items:
+                if isinstance(item, dict):
+                    if item.get("type") == "integration":
+                        continue
+                    curr_name = str(item.get("name", "")).strip()
+                    if curr_name.lower() == assessment_name_clean:
+                        assessment_id = item.get("id", "")
+                        return {
+                            "success": True,
+                            "exists": True,
+                            "id": assessment_id,
+                            "name": curr_name,
+                            "categoryName": item.get("categoryName"),
+                            "message": f"L2 assessment '{curr_name}' exists with ID '{assessment_id}'."
+                        }
+
+            # Fallback: fetch without name_contains filter in case backend filter behavior varies
+            if not items:
+                all_output = await assistant_utils.fetch_all_assessments_api(page_size=1000, ctx=ctx)
+                all_items = all_output.get("items", []) if isinstance(all_output, dict) else []
+                for item in all_items:
+                    if isinstance(item, dict):
+                        if item.get("type") == "integration":
+                            continue
+                        curr_name = str(item.get("name", "")).strip()
+                        if curr_name.lower() == assessment_name_clean:
+                            assessment_id = item.get("id", "")
+                            return {
+                                "success": True,
+                                "exists": True,
+                                "id": assessment_id,
+                                "name": curr_name,
+                                "categoryName": item.get("categoryName"),
+                                "message": f"L2 assessment '{curr_name}' exists with ID '{assessment_id}'."
+                            }
+
+            return {
+                "success": True,
+                "exists": False,
+                "id": None,
+                "name": None,
+                "categoryName": None,
+                "message": f"L2 assessment '{assessmentName}' does not exist."
+            }
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f"check_l2_assessment_exist error: {e}\n")
+            return {"success": False, "exists": False, "error": f"Unexpected error checking L2 assessment existence: {e}"}
+
+    @mcp.tool()
+    async def check_l2_control_exist(assessmentId: str, displayable: str, ctx: Context | None = None) -> dict[str, Any]:
+        """
+        Check if a control exists in an L2 assessment by its displayable number/alias and return its control ID if found.
+
+        Args:
+            assessmentId (str): ID of the L2 assessment.
+            displayable (str): Displayable control number/identifier (e.g., '3020', '3020.1', '1.1').
+
+        Returns:
+            dict:
+                - success (bool): Indicates if the check completed successfully.
+                - exists (bool): Whether the control exists.
+                - id (str | None): Control ID if found, None otherwise.
+                - controlId (str | None): Same as id.
+                - displayable (str | None): Matched displayable number.
+                - name (str | None): Control name if found.
+                - message (str): Informative status message.
+        """
+        try:
+            logger.info(f"check_l2_control_exist: assessmentId={assessmentId}, displayable={displayable}\n")
+            if not assessmentId or not str(assessmentId).strip():
+                return {"success": False, "exists": False, "error": "assessmentId is required and cannot be empty."}
+            if not displayable or not str(displayable).strip():
+                return {"success": False, "exists": False, "error": "displayable is required and cannot be empty."}
+
+            assessment_id = str(assessmentId).strip()
+            disp_target = str(displayable).strip()
+
+            output = await assistant_utils.get_plan_controls_api(assessment_id, displayable=disp_target, ctx=ctx)
+
+            items = []
+            if isinstance(output, dict) and "items" in output and isinstance(output["items"], list):
+                items = output["items"]
+            elif isinstance(output, list):
+                items = output
+
+            item = next(iter(items), None)
+
+            if isinstance(item, dict):
+                cid = item.get("id")
+                cname = item.get("name")
+                return {
+                    "success": True,
+                    "exists": True,
+                    "id": cid,
+                    "controlId": cid,
+                    "displayable": disp_target,
+                    "name": cname,
+                    "message": f"Control '{disp_target}' exists in L2 assessment '{assessment_id}' with ID '{cid}'."
+                }
+
+            return {
+                "success": True,
+                "exists": False,
+                "id": None,
+                "controlId": None,
+                "message": f"Control '{disp_target}' does not exist in L2 assessment '{assessment_id}'."
+            }
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f"check_l2_control_exist error: {e}\n")
+            return {"success": False, "exists": False, "error": f"Unexpected error checking L2 control existence: {e}"}
+
+    @mcp.tool()
+    async def check_control_link_exist(
+        assetId: str,
+        sourceControlId: str,
+        targetControlId: str,
+        ctx: Context | None = None
+    ) -> dict[str, Any]:
+        """
+        Check if a link exists between an L1 asset control and an L2 assessment control.
+
+        Args:
+            assetId (str): ID of the L1 asset (source plan ID).
+            sourceControlId (str): ID of the L1 asset leaf control (source control ID).
+            targetControlId (str): ID of the target L2 assessment control.
+
+        Returns:
+            dict:
+                - success (bool): Indicates if the check completed successfully.
+                - exists (bool): Whether the link exists.
+                - sourceControlId (str): Source control ID.
+                - targetControlId (str): Target control ID.
+                - message (str): Informative status message.
+        """
+        try:
+            logger.info(
+                f"check_control_link_exist: assetId={assetId}, sourceControlId={sourceControlId}, "
+                f"targetControlId={targetControlId}\n"
+            )
+            if not assetId or not str(assetId).strip():
+                return {"success": False, "exists": False, "error": "assetId is required and cannot be empty."}
+            if not sourceControlId or not str(sourceControlId).strip():
+                return {"success": False, "exists": False, "error": "sourceControlId is required and cannot be empty."}
+            if not targetControlId or not str(targetControlId).strip():
+                return {"success": False, "exists": False, "error": "targetControlId is required and cannot be empty."}
+
+            asset_id = str(assetId).strip()
+            source_ctrl_id = str(sourceControlId).strip()
+            target_ctrl_id = str(targetControlId).strip()
+
+            output = await assistant_utils.fetch_control_links_api(
+                source_plan_id=asset_id,
+                source_plan_control_id=source_ctrl_id,
+                ctx=ctx
+            )
+
+            if isinstance(output, str):
+                logger.error(f"check_control_link_exist error: {output}\n")
+                return {"success": False, "exists": False, "error": output}
+
+            if isinstance(output, dict) and "error" in output:
+                logger.error(f"check_control_link_exist error: {output.get('error')}\n")
+                return {"success": False, "exists": False, "error": output.get("error")}
+
+            items = output.get("items", []) if isinstance(output, dict) else (output if isinstance(output, list) else [])
+
+            for item in items:
+                if isinstance(item, dict):
+                    target_plan = item.get("targetPlan") or {}
+                    item_target_ctrl_id = str(target_plan.get("controlId", "")).strip()
+                    item_target_plan_id = str(target_plan.get("id", "")).strip()
+
+                    if item_target_ctrl_id == target_ctrl_id:
+                        return {
+                            "success": True,
+                            "exists": True,
+                            "sourceControlId": source_ctrl_id,
+                            "targetControlId": target_ctrl_id,
+                            "targetAssessmentId": item_target_plan_id or None,
+                            "message": f"Link exists between source control '{source_ctrl_id}' and target control '{target_ctrl_id}' (link ID: '{link_id}')."
+                        }
+
+            return {
+                "success": True,
+                "exists": False,
+                "sourceControlId": source_ctrl_id,
+                "targetControlId": target_ctrl_id,
+                "message": f"No link exists between source control '{source_ctrl_id}' and target control '{target_ctrl_id}'."
+            }
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f"check_control_link_exist error: {e}\n")
+            return {"success": False, "exists": False, "error": f"Unexpected error checking control link existence: {e}"}
 
     @mcp.tool()
     async def schedule_asset_execution(assetId: str, runPrefixName: str, description: str, cronTab: str,controlPeriod: str,controlDuration: int, ctx: Context | None = None) -> dict:

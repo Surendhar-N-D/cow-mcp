@@ -1634,3 +1634,27 @@ async def get_assessment_run_controls(ctx: Context, assessment_run_id: str,size:
 
 
 
+@mcp.tool(utils.tool_annotations("List Action Blueprints", read_only = True))
+async def list_action_blueprints(ctx: Context | None = None) -> list | str:
+    """
+    Lists the available action blueprints that can be used to create action in the system. Returns predefined action specification, deployment, bindings that are not yet instantiated as actions.
+   
+    Returns:
+        - List of action configuration items : Each item contains a action
+        - Error message (str): If retrieval fails or an error occurs
+    
+    """
+    try:
+        logger.info("list_action_blueprints: \n")
+        output=await utils.make_GET_API_call_to_CCow("/pc-api/v1/actions", ctx)
+        error = utils.build_structured_error(output, "list_action_blueprints")
+        if error:
+            logger.error(f"list_action_blueprints error: {output}\n")
+            return {"success": False, "error": error}
+        
+        return output
+
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        logger.error("list_action_blueprints error: {}\n".format(e))
+        return {"success": False, "error": f"Unexpected error list action blueprints: {e}"}

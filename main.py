@@ -32,6 +32,12 @@ if "insights" in MCP_TOOLS:
 
 if "rules" in MCP_TOOLS:
     from prompts.rule import rule
+
+if "action" in MCP_TOOLS:
+    from prompts.rule import action_rule
+    from tools.rules import action_rules
+
+if "rules" in MCP_TOOLS or "action" in MCP_TOOLS:
     from tools.rules import rules
 
 if "workflow" in MCP_TOOLS:
