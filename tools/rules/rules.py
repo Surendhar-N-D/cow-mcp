@@ -1968,7 +1968,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
                             "sourceControlId": source_ctrl_id,
                             "targetControlId": target_ctrl_id,
                             "targetAssessmentId": item_target_plan_id or None,
-                            "message": f"Link exists between source control '{source_ctrl_id}' and target control '{target_ctrl_id}' (link ID: '{link_id}')."
+                            "message": f"Link exists between source control '{source_ctrl_id}' and target control '{target_ctrl_id}'."
                         }
 
             return {

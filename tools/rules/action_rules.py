@@ -52,7 +52,7 @@ def fetch_action_rule_summary( ctx: Context | None = None) -> list[vo.Simplified
         }
 
 @mcp.tool(annotations=utils.tool_annotations("List Action Specs", read_only=True))
-async def list_action_specs(ctx: Context | None = None) -> actionvo.ActionSpecListVO:
+async def list_action_specs(name: str = None, ctx: Context | None = None) -> actionvo.ActionSpecListVO:
     """
     List action specifications
 
@@ -67,6 +67,8 @@ async def list_action_specs(ctx: Context | None = None) -> actionvo.ActionSpecLi
             "isStatusToBeIncluded": True,
             "state": "inactive,active",
         }
+        if name:
+            params["name"] = name 
         output = await utils.make_API_call_to_CCow_and_get_response(
             constants.URL_ACTION_SPECS, "GET", request_body=params, ctx=ctx
         )
@@ -92,6 +94,7 @@ async def list_action_specs(ctx: Context | None = None) -> actionvo.ActionSpecLi
 
 @mcp.tool(annotations=utils.tool_annotations("List Action Deployments", read_only=True))
 async def list_action_deployment(
+    name: str = None,
     ctx: Context | None = None,
 ) -> actionvo.ActionDeploymentListVO:
     """
@@ -108,6 +111,8 @@ async def list_action_deployment(
             "isStatusToBeIncluded": True,
             "state": "inactive,active",
         }
+        if name:
+            params["name"] = name 
         output = await utils.make_API_call_to_CCow_and_get_response(
             constants.URL_ACTION_DEPLOYMENTS, "GET", request_body=params, ctx=ctx
         )
@@ -133,6 +138,7 @@ async def list_action_deployment(
 
 @mcp.tool(annotations=utils.tool_annotations("List Action Bindings", read_only=True))
 async def list_action_bindings(
+    name: str = None,
     ctx: Context | None = None,
 ) -> actionvo.ActionBindingListVO:
     """
@@ -149,6 +155,9 @@ async def list_action_bindings(
             "isStatusToBeIncluded": True,
             "state": "inactive,active",
         }
+
+        if name:
+            params["name"] = name 
         output = await utils.make_API_call_to_CCow_and_get_response(
             constants.URL_ACTION_BINDINGS, "GET", request_body=params, ctx=ctx
         )
@@ -174,6 +183,7 @@ async def list_action_bindings(
 
 @mcp.tool(annotations=utils.tool_annotations("List Action Loopbacks", read_only=True))
 async def list_action_loopbacks(
+    name: str = None,
     ctx: Context | None = None,
 ) -> actionvo.ActionLoopbackListVO:
     """
@@ -190,6 +200,8 @@ async def list_action_loopbacks(
             "isStatusToBeIncluded": True,
             "state": "inactive,active",
         }
+        if name:
+            params["name"] = name 
         output = await utils.make_API_call_to_CCow_and_get_response(
             constants.URL_ACTION_LOOPBACKS, "GET", request_body=params, ctx=ctx
         )
@@ -1634,8 +1646,8 @@ async def get_assessment_run_controls(ctx: Context, assessment_run_id: str,size:
 
 
 
-@mcp.tool(utils.tool_annotations("List Action Blueprints", read_only = True))
-async def list_action_blueprints(ctx: Context | None = None) -> list | str:
+@mcp.tool(annotations=utils.tool_annotations("List Action Blueprints", read_only = True))
+async def list_action_blueprints(name : str = None, ctx: Context | None = None) -> list | str:
     """
     Lists the available action blueprints that can be used to create action in the system. Returns predefined action specification, deployment, bindings that are not yet instantiated as actions.
    
@@ -1646,7 +1658,10 @@ async def list_action_blueprints(ctx: Context | None = None) -> list | str:
     """
     try:
         logger.info("list_action_blueprints: \n")
-        output=await utils.make_GET_API_call_to_CCow("/pc-api/v1/actions", ctx)
+        params = {}
+        if name:
+            params["name"] = name 
+        output=await utils.make_API_call_to_CCow_and_get_response("/pc-api/v1/actions",method="GET", request_body=params, ctx=ctx)
         error = utils.build_structured_error(output, "list_action_blueprints")
         if error:
             logger.error(f"list_action_blueprints error: {output}\n")
