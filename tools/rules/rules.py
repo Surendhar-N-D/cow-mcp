@@ -28,6 +28,7 @@ import constants.error_constants as error_constants
 import json
 from mcptypes.rule_type import CVEEntryVO
 
+from mcptypes import assessment_config_tool_types as assessment_vo
 
 
 # Phase 1: Lightweight task summary resource
@@ -432,7 +433,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
             }
 
     @mcp.tool()
-    def fetch_cc_rule_by_name(rule_name: str, ctx: Context | None = None) -> dict[str, Any]:
+    def fetch_cc_rule_by_name(rule_name: str, ctx: Context | None = None) -> dict:
         """
         Fetch rule details by rule name from the **compliancecow**.
 
@@ -1555,6 +1556,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
         description: str,
         displayable: str,
         assetId: str,
+        isPreRequisite: bool = False,
         ctx: Context | None = None
     ) -> dict[str, Any]:
         """
@@ -1603,7 +1605,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
                 "displayable": disp_target,
                 "alias": disp_target,
                 "planId": asset_id,
-                "isPreRequisite": False
+                "isPreRequisite": isPreRequisite
             }
 
             target_resp = await assistant_utils.create_plan_control_api(target_payload, ctx=ctx)
@@ -2513,6 +2515,249 @@ if constants.ENABLE_CCOW_API_TOOLS:
                 "error": f"Failed to verify control automation: {str(e)}",
                 "control_id": control_id,
                 "automated": False
+            }
+
+    @mcp.tool()
+    async def map_control_depended_input(
+        source_control_id: str,
+        target_control_id: str,
+        input_name: str,
+        output_name: str,
+        ctx: Context | None = None,
+    ) -> dict[str, Any]:
+        """
+        Map a dependent input of a target control to the output/evidence of a source control in ComplianceCow.
+
+        PURPOSE:
+        When an automated control depends on data or evidence produced by another upstream control,
+        this tool establishes the dependency link by updating the target control's `dependedInputs`.
+
+        DATA FLOW & ROLES:
+        - Source Control (Upstream): Executes first and produces output/evidence (`output_name`).
+        - Target Control (Downstream): Executes later and consumes the source output as an input (`input_name`).
+        - Flow direction: Source Control (`output_name`) ──> Target Control (`input_name`).
+
+        WHEN TO USE:
+        - Use this tool when you need to link or chain controls where one control's input comes from another control's output.
+        - Before mapping, you can optionally run `check_control_depended_input` to verify whether the mapping already exists.
+        - After mapping, the target control will automatically consume the specified evidence/output during execution.
+
+        Args:
+            source_control_id (str): The UUID of the upstream/source control that produces the output data
+            target_control_id (str): The UUID of the downstream/target control whose input depends on the source control's output
+            input_name (str): The name of the input field in the target control's ruleInputs to be mapped
+            output_name (str): The name of the output/evidence produced by the source control that should be fed into the input
+
+        Returns:
+            dict: Result containing:
+                - success (bool): True if mapping was successfully configured (HTTP 204/200), False otherwise.
+                - message (str): Human-readable confirmation or error explanation.
+                - target_control_id (str): Target control UUID.
+                - source_control_id (str): Source control UUID.
+                - input_name (str): Mapped input field name.
+                - output_name (str): Mapped output field name.
+                - mapping (dict): The configured mapping object ({ planControlId, outputName }).
+                - error (Optional[str|dict]): Error description if the operation failed.
+        """
+        try:
+            clean_source_id = (source_control_id or "").strip()
+            clean_target_id = (target_control_id or "").strip()
+            clean_input_name = (input_name or "").strip().lstrip("/")
+            clean_output_name = (output_name or "").strip()
+
+            if clean_input_name.startswith("dependedInputs/"):
+                clean_input_name = clean_input_name[len("dependedInputs/"):].strip("/")
+
+            logger.info(
+                f"map_control_depended_input: source_control_id={clean_source_id}, "
+                f"target_control_id={clean_target_id}, input_name={clean_input_name}, "
+                f"output_name={clean_output_name}\n"
+            )
+
+            if not clean_source_id:
+                return {"success": False, "error": "source_control_id is required."}
+            if not clean_target_id:
+                return {"success": False, "error": "target_control_id is required."}
+            if not clean_input_name:
+                return {"success": False, "error": "input_name is required."}
+            if not clean_output_name:
+                return {"success": False, "error": "output_name is required."}
+            if clean_source_id.lower() == clean_target_id.lower():
+                return {
+                    "success": False,
+                    "error": "source_control_id and target_control_id cannot be the same."
+                }
+
+            payload = [
+                {
+                    "op": "add",
+                    "path": f"/dependedInputs/{clean_input_name}",
+                    "value": {
+                        "planControlId": clean_source_id,
+                        "outputName": clean_output_name
+                    }
+                }
+            ]
+
+            logger.debug(f"map_control_depended_input payload: {json.dumps(payload)}\n")
+
+            url = f"{constants.URL_PLAN_CONTROLS}/{clean_target_id}"
+            resp = await utils.make_API_call_to_CCow_and_get_response(
+                url,
+                "PATCH",
+                payload,
+                ctx=ctx
+            )
+
+            error = utils.build_structured_error(resp, "map_control_depended_input")
+            if error:
+                logger.error(f"map_control_depended_input error: {resp}\n")
+                return {"success": False, "error": error}
+
+
+            return {
+                "success": True,
+                "message": (
+                    f"Successfully mapped dependent input '{clean_input_name}' on target control "
+                    f"'{clean_target_id}' to output '{clean_output_name}' of source control '{clean_source_id}'."
+                )
+            }
+
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f"map_control_depended_input error: {e}\n")
+            return {
+                "success": False,
+                "error": f"Unexpected error mapping control depended input: {e}"
+            }
+
+    @mcp.tool()
+    async def check_control_depended_input(
+        source_control_id: str,
+        target_control_id: str,
+        input_name: str,
+        output_name: str,
+        ctx: Context | None = None,
+    ) -> dict[str, Any]:
+        """
+        Check if a dependent input mapping (dependedInputs) exists on a target control, and verify if it matches expected source control and output.
+
+        DATA FLOW & ROLES:
+        - Source Control (Upstream): The control expected to produce the output.
+        - Target Control (Downstream): The control whose `dependedInputs` are being inspected.
+        - Input Name: The name of the input on the target control.
+        - Output Name: The expected output name from the source control.
+
+        Args:
+            source_control_id (str): The UUID of the expected upstream/source control.
+            target_control_id (str): The UUID of the target control to inspect.
+            input_name (str): The name of the input field to check in dependedInputs.
+            output_name (str): The expected output/evidence name from the source control.
+
+        Returns:
+            dict: Verification report containing:
+                - success (bool): True if target control was fetched successfully.
+                - exists (bool): True if input_name exists in target control's dependedInputs.
+                - message (str): Detailed human-readable explanation of the check result.
+                - error (Optional[str|dict]): Error description if fetching failed.
+        """
+        try:
+            clean_source_id = (source_control_id or "").strip()
+            clean_target_id = (target_control_id or "").strip()
+            clean_input_name = (input_name or "").strip().lstrip("/")
+            clean_output_name = (output_name or "").strip()
+
+            if clean_input_name.startswith("dependedInputs/"):
+                clean_input_name = clean_input_name[len("dependedInputs/"):].strip("/")
+
+            logger.info(
+                f"check_control_depended_input: source_control_id={clean_source_id}, "
+                f"target_control_id={clean_target_id}, input_name={clean_input_name}, "
+                f"output_name={clean_output_name}\n"
+            )
+
+
+            if not clean_source_id:
+                return {"success": False, "error": "source_control_id is required."}
+            if not clean_target_id:
+                return {"success": False, "error": "target_control_id is required."}
+            if not clean_input_name:
+                return {"success": False, "error": "input_name is required."}
+            if not clean_output_name:
+                return {"success": False, "error": "output_name is required."}
+            if clean_source_id.lower() == clean_target_id.lower():
+                return {
+                    "success": False,
+                    "error": "source_control_id and target_control_id cannot be the same."
+                }
+
+            url = f"{constants.URL_PLAN_CONTROLS}/{clean_target_id}"
+            output = await utils.make_API_call_to_CCow_and_get_response(url, "GET", ctx=ctx)
+
+            error = utils.handle_error_response(output, "check_control_depended_input")
+            if error:
+                return {
+                    "success": False,
+                    "exists": False,
+                    "target_control_id": clean_target_id,
+                    "error": error.get("error", "Failed to retrieve target control details")
+                }
+
+            if not isinstance(output, dict):
+                return {
+                    "success": False,
+                    "exists": False,
+                    "matched": False,
+                    "target_control_id": clean_target_id,
+                    "error": f"Invalid response format received for control '{clean_target_id}'."
+                }
+
+            control_name = output.get("name", "")
+            depended_inputs = output.get("dependedInputs") or {}
+            if not isinstance(depended_inputs, dict):
+                depended_inputs = {}
+
+            rule_obj = output.get("rule") or {}
+            rule_inputs = rule_obj.get("ruleInputs") or {} if isinstance(rule_obj, dict) else {}
+
+            # is_valid_rule_input = clean_input_name in rule_inputs
+            current_mapping = depended_inputs.get(clean_input_name)
+
+            if current_mapping and isinstance(current_mapping, dict):
+                actual_source_id = str(current_mapping.get("planControlId", "")).strip()
+                actual_output_name = str(current_mapping.get("outputName", "")).strip()
+
+
+                source_matches = actual_source_id == clean_source_id
+                output_matches = actual_output_name == clean_output_name
+
+                matched = source_matches and output_matches
+                if matched:
+                    message = (
+                        f"Dependency exists and matches: Target control '{clean_target_id}' "
+                        f"('{control_name}') input '{clean_input_name}' is mapped to source control "
+                        f"'{actual_source_id}' output '{actual_output_name}'."
+                    )
+
+                    return {
+                        "success": True,
+                        "exists": True,
+                        "message": message
+                    }
+
+            return {
+                "success": False,
+                "exists": False,
+                "message": (f"No matching dependency found for input '{clean_input_name}'.")
+            }
+
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f"check_control_depended_input error: {e}\n")
+            return {
+                "success": False,
+                "exists": False,
+                "error": f"Unexpected error checking control depended input: {e}"
             }
 
     @mcp.tool()
@@ -9140,3 +9385,164 @@ if constants.ENABLE_CVE_TOOLS:
                 return [CVEEntryVO.model_validate(item) for item in raw_items]
             except json.JSONDecodeError as e:
                 return "Invalid JSON in CVE catalog: {e}"
+
+
+@mcp.tool()
+async def create_assessment_l2(
+    categoryName: str,
+    assessmentName: str,
+    ctx: Context | None = None
+) -> dict:
+    """
+    Create a new l2 assessment with category name and assessment name.
+    
+    This function creates a category (or reuses an existing category if it already exists),
+    and then creates a new assessment.
+    
+    Args:
+        categoryName (str): Name of the assessment category.
+        assessmentName (str): Name of the l2 assessment to create.
+        
+    Returns:
+        Dict with success status and created assessment data (AssessmentVO) or error details:
+        - success (bool): Whether the request was successful
+        - data (AssessmentVO, optional): Created assessment details containing id, name, categoryName
+        - error (str | dict, optional): Error message or details if creation failed
+    """
+    try:
+        logger.info("create_assessment - L2: \n")
+
+        if not categoryName or not str(categoryName).strip():
+            logger.error("create_assessment error: categoryName is required\n")
+            return {"success": False, "error": "categoryName is required"}
+
+        if not assessmentName or not str(assessmentName).strip():
+            logger.error("create_assessment error: assessmentName is required\n")
+            return {"success": False, "error": "assessmentName is required"}
+
+        category_name = str(categoryName).strip()
+        assessment_name = str(assessmentName).strip()
+
+        category_create_payload = {
+            "name": category_name
+        }
+
+        create_category = await utils.make_API_call_to_CCow_and_get_response(
+            constants.URL_ASSESSMENT_CATEGORIES, "POST", category_create_payload, ctx=ctx
+        )
+
+        error = utils.handle_error_response(create_category, "create_assessment")
+        if error:
+            logger.error("create_assessment create_category_error: {}\n".format(error))
+            if isinstance(create_category, dict) and create_category.get("Description") != "category name already exists":
+                return error
+
+        payload = {
+            "name": assessment_name,
+            "type": "generic",
+            "applicationType": "generic",
+            "status": "active",
+            "categoryName": category_name,
+        }
+
+        create_output = await utils.make_API_call_to_CCow_and_get_response(
+            constants.URL_PLANS, "POST", payload, ctx=ctx
+        )
+        error = utils.handle_error_response(create_output, "create_assessment")
+        if error:
+            logger.error("create_assessment create_error: {}\n".format(error))
+            return error
+
+        if isinstance(create_output, dict) and create_output.get("id"):
+            assessment = assessment_vo.AssessmentVO(
+                id=create_output.get("id"),
+                name=assessment_name,
+                categoryName=category_name
+            )
+            return {"success": True, "data": assessment}
+
+        return {"success": False, "error": f"Failed to create assessment: {create_output}"}
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        logger.error("create_assessment error: {}\n".format(e))
+        return {"success": False, "error": f"Unexpected error creating assessment: {e}"}
+
+
+@mcp.tool()
+async def create_control_l2(
+    name: str,
+    description: str,
+    displayable: str,
+    assessmentId: str,
+    ctx: Context | None = None
+) -> dict[str, Any]:
+    """
+    Create a control in an assessment following a parent-child hierarchy.
+
+    Controls follow a parent-child hierarchy: a control containing another control is a parent,
+    and the last control is the child/leaf. For example, 1 -> 1.1 -> 1.1.1, where 1 and 1.1 are parents
+    and 1.1.1 is the leaf. A child can be added only under an existing parent; otherwise, create the parent first.
+    If a control is added below a leaf, the existing leaf becomes a parent and the new control becomes the leaf.
+    When a leaf becomes a parent, its existing leaf-specific configurations, such as rules, are removed.
+    Rules and similar configurations should only be attached to leaf controls.
+
+    Args:
+        name (str): Control name.
+        description (str): Control description.
+        displayable (str): Displayable control identifier (e.g., '1', '1.1', '1.1.1').
+        assessmentId (str): Assessment ID.
+
+    Returns:
+        dict:
+            - success (bool): Operation success status.
+            - id (str): ID of the created control.
+            - displayable (str): Displayable identifier.
+            - name (str): Control name.
+            - assessmentId (str): Assessment ID.
+            - message (str): Informative status message.
+    """
+    try:
+        logger.info(f"create_control_l2: name={name}, displayable={displayable}, assessmentId={assessmentId}\n")
+        if not assessmentId or not str(assessmentId).strip():
+            return {"success": False, "error": "assessmentId is required and cannot be empty."}
+        if not displayable or not str(displayable).strip():
+            return {"success": False, "error": "displayable is required and cannot be empty."}
+        if not name or not str(name).strip():
+            return {"success": False, "error": "name is required and cannot be empty."}
+
+        assessment_id = str(assessmentId).strip()
+        disp_target = str(displayable).strip()
+        ctrl_name = str(name).strip()
+        ctrl_desc = str(description).strip()
+
+        # Now create the target control
+        target_payload = {
+            "name": ctrl_name,
+            "description": ctrl_desc,
+            "displayable": disp_target,
+            "alias": disp_target,
+            "planId": assessment_id,
+            "isPreRequisite": False
+        }
+
+        target_resp = await assistant_utils.create_plan_control_api(target_payload, ctx=ctx)
+        err = utils.handle_error_response(target_resp, "create_control_l2:create_target_control")
+        if err:
+            return err
+
+        target_id = target_resp.get("id") if isinstance(target_resp, dict) else None
+        if not target_id:
+            return {"success": False, "error": f"Failed to create target control: {target_resp}"}
+
+        return {
+            "success": True,
+            "id": target_id,
+            "displayable": disp_target,
+            "name": ctrl_name,
+            "assessmentId": assessment_id,
+            "message": f"Control '{disp_target}' created successfully with ID '{target_id}'."
+        }
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        logger.error(f"create_control_l2 error: {e}\n")
+        return {"success": False, "error": f"Unexpected error creating control: {e}"}
