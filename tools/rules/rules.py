@@ -1423,7 +1423,8 @@ if constants.ENABLE_CCOW_API_TOOLS:
                             "exists": True,
                             "id": asset_id,
                             "name": curr_name,
-                            "message": f"Asset '{curr_name}' exists with ID '{asset_id}'."
+                            "message": f"Asset '{curr_name}' exists with ID '{asset_id}'.",
+                            "ui-url": f"{utils.get_assessment_details_ui_url(asset_id)}"
                         }
 
             return {
@@ -1481,7 +1482,8 @@ if constants.ENABLE_CCOW_API_TOOLS:
                 "success": True,
                 "id": asset_id,
                 "name": asset_name,
-                "message": f"Asset '{asset_name}' created successfully with ID '{asset_id}'."
+                "message": f"Asset '{asset_name}' created successfully with ID '{asset_id}'.",
+                "ui-url": f"{utils.get_assessment_details_ui_url(asset_id)}"
             }
         except Exception as e:
             logger.error(traceback.format_exc())
@@ -1802,7 +1804,8 @@ if constants.ENABLE_CCOW_API_TOOLS:
                             "id": assessment_id,
                             "name": curr_name,
                             "categoryName": item.get("categoryName"),
-                            "message": f"L2 assessment '{curr_name}' exists with ID '{assessment_id}'."
+                            "message": f"L2 assessment '{curr_name}' exists with ID '{assessment_id}'.",
+                            "ui-url": f"{utils.get_assessment_details_ui_url(assessment_id)}"
                         }
 
             # Fallback: fetch without name_contains filter in case backend filter behavior varies
@@ -1822,7 +1825,8 @@ if constants.ENABLE_CCOW_API_TOOLS:
                                 "id": assessment_id,
                                 "name": curr_name,
                                 "categoryName": item.get("categoryName"),
-                                "message": f"L2 assessment '{curr_name}' exists with ID '{assessment_id}'."
+                                "message": f"L2 assessment '{curr_name}' exists with ID '{assessment_id}'.",
+                                "ui-url": f"{utils.get_assessment_details_ui_url(assessment_id)}"
                             }
 
             return {
@@ -9459,7 +9463,7 @@ async def create_assessment_l2(
                 name=assessment_name,
                 categoryName=category_name
             )
-            return {"success": True, "data": assessment}
+            return {"success": True, "data": assessment, "ui-url": f"{utils.get_assessment_details_ui_url(create_output.get('id'))}"}
 
         return {"success": False, "error": f"Failed to create assessment: {create_output}"}
     except Exception as e:

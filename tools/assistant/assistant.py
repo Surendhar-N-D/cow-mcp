@@ -277,7 +277,7 @@ async def create_assessment(
                 name=assessment_name,
                 categoryName=category_name
             )
-            return {"success": True, "data": assessment}
+            return {"success": True, "data": assessment, "ui-url": f"{utils.get_assessment_details_ui_url(create_output.get('id'))}"}
 
         return {"success": False, "error": f"Failed to create assessment: {create_output}"}
     except Exception as e:
@@ -3432,3 +3432,67 @@ async def assistant_check_control_exist(assessmentId: str, displayable: str, ctx
         logger.error(traceback.format_exc())
         logger.error(f"assistant_check_control_exist error: {e}\n")
         return {"success": False, "exists": False, "error": f"Unexpected error checking control existence: {e}"}
+
+
+@mcp.tool()
+async def check_assessment_exist(assessmentName: str, ctx: Context | None = None) -> dict[str, Any]:
+    """
+    Check if an assessment exists in ComplianceCow by assessment name.
+
+    Args:
+        assessmentName (str): Name of the assessment to check.
+
+    Returns:
+        dict:
+            - success (bool): Indicates if the operation completed successfully.
+            - exists (bool): Whether the assessment exists.
+            - id (str | None): Assessment ID if exists, None otherwise.
+            - name (str | None): Matched assessment name if exists, None otherwise.
+            - categoryName (str | None): Category name if exists, None otherwise.
+            - message (str): Informative status message.
+            - ui-url (str | None): UI URL for the assessment if exists.
+    """
+    try:
+        logger.info(f"check_assessment_exist: assessmentName={assessmentName}\n")
+        if not assessmentName or not str(assessmentName).strip():
+            return {"success": False, "exists": False, "error": "assessmentName is required and cannot be empty."}
+
+        assessment_name_clean = str(assessmentName).strip().lower()
+        output = await assistant_utils.get_assessment_details_api_with_name(str(assessmentName).strip(), ctx=ctx)
+
+        if isinstance(output, str):
+            logger.error(f"check_assessment_exist error: {output}\n")
+            return {"success": False, "exists": False, "error": output}
+
+        if isinstance(output, dict) and "error" in output:
+            logger.error(f"check_assessment_exist error: {output.get('error')}\n")
+            return {"success": False, "exists": False, "error": output.get("error")}
+
+        items = output.get("items", []) if isinstance(output, dict) else (output if isinstance(output, list) else [])
+        for item in items:
+            if isinstance(item, dict):
+                curr_name = str(item.get("name", "")).strip()
+                if curr_name.lower() == assessment_name_clean:
+                    assessment_id = item.get("id", "")
+                    return {
+                        "success": True,
+                        "exists": True,
+                        "id": assessment_id,
+                        "name": curr_name,
+                        "categoryName": item.get("categoryName"),
+                        "message": f"Assessment '{curr_name}' exists with ID '{assessment_id}'.",
+                        "ui-url": f"{utils.get_assessment_details_ui_url(assessment_id)}"
+                    }
+
+        return {
+            "success": True,
+            "exists": False,
+            "id": None,
+            "name": None,
+            "categoryName": None,
+            "message": f"Assessment '{assessmentName}' does not exist."
+        }
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        logger.error(f"check_assessment_exist error: {e}\n")
+        return {"success": False, "exists": False, "error": f"Unexpected error checking assessment existence: {e}"}

@@ -82,7 +82,10 @@ async def list_action_specs(name: str = None, ctx: Context | None = None) -> act
         items: list[actionvo.ActionSpecVO] = []
         if isinstance(output, dict) and "items" in output:
             for item in output["items"]:
-                items.append(actionvo.ActionSpecVO.model_validate(item))
+                spec_vo = actionvo.ActionSpecVO.model_validate(item)
+                if spec_vo.id:
+                    spec_vo.uiUrl = utils.get_action_spec_ui_url(spec_vo.id)
+                items.append(spec_vo)
 
         return actionvo.ActionSpecListVO(items=items)
     except Exception as e:
@@ -295,6 +298,7 @@ async def create_action_spec(
             id=spec_id,
             spec=spec_info,
             message="Action spec created successfully",
+            uiUrl=utils.get_action_spec_ui_url(spec_id) if spec_id else "",
         )
     except Exception as e:
         logger.error(traceback.format_exc())
@@ -577,6 +581,7 @@ async def update_action_spec(
             id=spec_id,
             spec=spec_info,
             message="Action spec updated successfully",
+            uiUrl=utils.get_action_spec_ui_url(target_id) if target_id else "",
         )
     except Exception as e:
         logger.error(traceback.format_exc())

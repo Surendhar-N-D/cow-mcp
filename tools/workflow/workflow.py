@@ -687,12 +687,7 @@ async def create_workflow(workflow_yaml: str, ctx: Context | None = None) -> str
         logger.info(f"Workflow created successfully with ID: {workflow_id}")
 
         # Build UI URL
-        try:
-            base_host = constants.host.rstrip("/api") if hasattr(constants, "host") and isinstance(constants.host, str) else getattr(constants, "host", "")
-            ui_url = f"{base_host}/ui/workflow-config/{workflow_id}" if base_host else ""
-        except Exception:
-            ui_url = ""
-
+        ui_url = utils.get_workflow_config_ui_url(workflow_id) if workflow_id else ""
         logger.info(f"Workflow created URL : {ui_url}")
         
         # Create Workflow Specification 
@@ -801,6 +796,8 @@ async def list_workflows(ctx: Context | None = None) -> list | str:
         if "items" in output:
             for item in output["items"]:
                 utils.trimWorkflowDetails(item)
+                workflow_id = (item.get("status") or {}).get("id") or item.get("id") or ""
+                item["uiUrl"] = utils.get_workflow_config_ui_url(workflow_id) if workflow_id else ""
                 # utils.deleteKey(item,"domainId")
                 # utils.deleteKey(item,"orgId")
                 # utils.deleteKey(item,"groupId")
@@ -837,7 +834,10 @@ async def get_workflow_by_name(name: str, ctx: Context | None = None) -> dict | 
             for item in output["items"]:
                 utils.trimWorkflowDetails(item, True)
             if len(output["items"]) > 0:
-                return output["items"][0]
+                item = output["items"][0]
+                workflow_id = (item.get("status") or {}).get("id") or item.get("id") or ""
+                item["uiUrl"] = utils.get_workflow_config_ui_url(workflow_id) if workflow_id else ""
+                return item
             return "No workflow found with the given name"
         return "Facing internal error"
     except Exception as e:
@@ -860,6 +860,8 @@ async def fetch_workflow_details(id:str, ctx: Context | None = None) -> dict | s
         if isinstance(output, str) or  "error" in output:
             logger.error("fetch_workflow_details error: {}\n".format(output))
             return "Facing internal error"
+        if isinstance(output, dict):
+            output["uiUrl"] = utils.get_workflow_config_ui_url(id) if id else ""
         return output
     except Exception as e:
         logger.error(traceback.format_exc())
