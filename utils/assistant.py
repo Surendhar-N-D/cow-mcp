@@ -369,12 +369,13 @@ async def fetch_all_assets_api(ctx: Optional[Context] = None) -> Union[Dict[str,
     return resp
 
 
-async def create_asset_api(asset_name: str, ctx: Optional[Context] = None) -> Union[Dict[str, Any], str]:
+async def create_asset_api(asset_name: str, appScopeId: str | None = "", ctx: Optional[Context] = None) -> Union[Dict[str, Any], str]:
     """Create a new asset asset"""
     payload = {
         "name": str(asset_name).strip(),
         "categoryName": "Integrations",
         "type": "integration",
+        "configId": appScopeId,
         "status": "active",
         "linkToDefaultCCFPlan": {},
     }

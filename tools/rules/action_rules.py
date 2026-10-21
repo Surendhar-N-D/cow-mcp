@@ -1071,6 +1071,7 @@ async def run_assessment(
             "description": description,
             "inputs": {},
             "profileId": "",
+            "useDefaultConfig": True,
             "otherInfos": {"disableAutomatedAction": True}
         }
         logger.debug("run_assessment payload: {}\n".format(json.dumps(payload)))

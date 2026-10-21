@@ -1260,7 +1260,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
 
 
     @mcp.tool()
-    async def create_asset_and_check(assetName: str, controlName: str, checkName: str, checkDescription: str, ctx: Context | None = None) -> dict:
+    async def create_asset_and_check(assetName: str, controlName: str, checkName: str, checkDescription: str, appScopeId: str | None = "", ctx: Context | None = None) -> dict:
         """
             Create a new asset with an initial control and check structure.
             The asset will be created with a hierarchical structure: asset -> parentcontrol -> control -> check.
@@ -1270,6 +1270,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
                 - controlName (str): Name of the initial control to be created within the asset.
                 - checkName (str): Name of the initial check to be created under the control. (letters and numbers only, no spaces)
                 - checkDescription (str): Description of the initial check.
+                - appScopeId (str): Application scope Id.
             
             Returns:
                 - success (bool): Indicates if the asset was created successfully.
@@ -1288,6 +1289,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
                 "name": assetName,
                 "categoryName":"Integrations",
                 "type": "integration",
+                "configId":appScopeId,
                 "status": "active",
                 "linkToDefaultCCFPlan": {},
                 "planControls": [
@@ -1440,12 +1442,13 @@ if constants.ENABLE_CCOW_API_TOOLS:
             return {"success": False, "exists": False, "error": f"Unexpected error checking asset existence: {e}"}
 
     @mcp.tool(annotations=utils.tool_annotations("Create Asset", read_only=False))
-    async def l1_create_asset(assetName: str, ctx: Context | None = None) -> dict[str, Any]:
+    async def l1_create_asset(assetName: str,appScopeId: str | None = "", ctx: Context | None = None) -> dict[str, Any]:
         """
         Create a asset and return its created ID.
 
         Args:
             assetName (str): Name of the asset to create.
+            appScopeId (str): Application scope Id.
 
         Returns:
             dict:
@@ -1460,7 +1463,7 @@ if constants.ENABLE_CCOW_API_TOOLS:
                 return {"success": False, "error": "assetName is required and cannot be empty."}
 
             asset_name = str(assetName).strip()
-            output = await assistant_utils.create_asset_api(asset_name, ctx=ctx)
+            output = await assistant_utils.create_asset_api(asset_name, appScopeId=appScopeId, ctx=ctx)
 
             if isinstance(output, str):
                 logger.error(f"l1_create_asset error: {output}\n")
@@ -9395,6 +9398,7 @@ if constants.ENABLE_CVE_TOOLS:
 async def create_assessment_l2(
     categoryName: str,
     assessmentName: str,
+    appScopeId: str | None = "",
     ctx: Context | None = None
 ) -> dict:
     """
@@ -9406,6 +9410,7 @@ async def create_assessment_l2(
     Args:
         categoryName (str): Name of the assessment category.
         assessmentName (str): Name of the l2 assessment to create.
+        appScopeId (str, optional): Application scope ID. Defaults to an empty string.
         
     Returns:
         Dict with success status and created assessment data (AssessmentVO) or error details:
@@ -9447,6 +9452,7 @@ async def create_assessment_l2(
             "applicationType": "generic",
             "status": "active",
             "categoryName": category_name,
+            "configId": appScopeId if appScopeId else ""
         }
 
         create_output = await utils.make_API_call_to_CCow_and_get_response(
