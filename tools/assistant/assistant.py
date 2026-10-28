@@ -3120,6 +3120,104 @@ async def create_control_config(
     
 
 @mcp.tool()
+async def create_l3_control_config(
+    assessmentId: str,
+    controlName: str,
+    controlDescription: str,
+    displayable: str,
+    entityClass: str | None = None,
+    entities: list[str] | None = None,
+    ctx: Context | None = None
+) -> dict:
+    """
+    Create an L3 control config in an assessment.
+
+    Important:
+    - Use only user-provided inputs and do not assume any values.
+
+    Args:
+        assessmentId (str): Assessment (plan) ID (required).
+        controlName (str): Control name (required).
+        controlDescription (str): Control description (required).
+        displayable (str): Control displayable, e.g. "1.1.1" (required).
+        entityClass (str, optional): Entity class name.
+        entities (list[str], optional): List of entity names.
+
+    Returns:
+        Dict with success status and created control details or error message.
+    """
+    try:
+        logger.info("create_l3_control_config invoked\n")
+
+        required = {
+            "assessmentId": assessmentId,
+            "controlName": controlName,
+            "controlDescription": controlDescription,
+            "displayable": displayable,
+        }
+        for field, value in required.items():
+            if not value or not str(value).strip():
+                return {"success": False, "error": f"{field} is mandatory"}
+
+        alias = str(displayable).strip()
+        payload = {
+            "name": controlName.strip(),
+            "description": controlDescription.strip(),
+            "displayable": alias,
+            "alias": alias,
+            "planId": str(assessmentId).strip(),
+            "isPreRequisite": False
+        }
+
+        valid_entities = [e.strip() for e in (entities or []) if isinstance(e, str) and e.strip()]
+        if entityClass and str(entityClass).strip() and valid_entities:
+            payload["additionalContext"] = {
+                "entities": [
+                    {"name": entity, "class": entityClass.strip()}
+                    for entity in valid_entities
+                ]
+            }
+
+        logger.debug(f"create_l3_control_config payload: {json.dumps(payload, indent=2)}\n")
+
+        resp = await utils.make_API_call_to_CCow_and_get_response(
+            constants.URL_PLAN_CONTROLS,
+            "POST",
+            payload,
+            ctx=ctx
+        )
+
+        if isinstance(resp, str):
+            logger.error(f"create_l3_control_config error: {resp}\n")
+            return {"success": False, "error": resp}
+        if isinstance(resp, dict) and "Message" in resp:
+            logger.error(f"create_l3_control_config error: {resp}\n")
+            return {"success": False, "error": resp}
+        if isinstance(resp, dict) and resp.get("id"):
+            logger.info(f"create_l3_control_config: Successfully created control with ID: {resp.get('id')}\n")
+            return {
+                "success": True,
+                "data": {
+                    "id": resp.get("id"),
+                    "name": resp.get("name", controlName.strip()),
+                    "displayable": resp.get("displayable", alias),
+                    "alias": resp.get("alias", alias),
+                    "assessment_id": assessmentId
+                }
+            }
+
+        return {"success": False, "error": f"Failed to create control: {resp}"}
+
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        logger.error(f"create_l3_control_config error: {e}\n")
+        return {
+            "success": False,
+            "error": f"Unexpected error while creating L3 control config: {e}"
+        }
+
+
+@mcp.tool()
 async def update_control_config_contexts(
     controlConfigId: str,
     entityClass: str,

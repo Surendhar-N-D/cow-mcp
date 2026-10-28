@@ -654,7 +654,7 @@ async def fetch_credential_config(name: str,version: str,ctx: Context | None = N
 
 @mcp.tool()
 async def create_application(application_name: str, application_version: str, credential_type: str, credential_version: str, 
-                            credential_name: str, application_url: str, ctx: Context | None = None):
+                            credential_name: str, application_url: str , additional_tags: dict[str, list[str]] = None, ctx: Context | None = None):
     """
     Create a new ComplianceCow application.
     -------------------------------------------------------------------------
@@ -1056,6 +1056,9 @@ async def create_application(application_name: str, application_version: str, cr
                     "value": "",
                 }
             )
+        if additional_tags:
+            for key, values in additional_tags.items():
+                labels.setdefault(key, []).extend(values)
 
         payload = {
             "credentials": [

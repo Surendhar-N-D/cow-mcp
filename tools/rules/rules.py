@@ -433,6 +433,66 @@ if constants.ENABLE_CCOW_API_TOOLS:
             }
 
     @mcp.tool()
+    def fetch_catalog_rule_by_name(rule_name: str, ctx: Context | None = None) -> dict[str, Any]:
+        """Retrieve a catalog rule by its name.
+
+        Use when the user asks to view or inspect a catalog rule by name,
+        including rules not yet published to ComplianceCow.
+        Returns the currently stored definition,
+
+        Tool selection:
+        - Prefer this tool for direct retrieval of a stored catalog definition.
+        - Use fetch_cc_rule_by_name for the published rule in ComplianceCow.
+        - Use fetch_rule within the rule creation/editing workflow when its
+          normalized apiVersion and input/output mappings are needed.
+        - Use get_rules_summary or fetch_rules_suggestions for catalog discovery
+          when the rule name is unknown.
+
+        Use check_rule_publish_status if publication status is needed.
+
+        Args:
+            rule_name: name of the catalog rule
+
+        Returns:
+            Dictionary with success, rule_name, and rule_structure on success,
+            or success, rule_name, and error on failure.
+        """
+        if not rule_name or not rule_name.strip():
+            return {
+                "success": False,
+                "rule_name": rule_name,
+                "error": "rule_name is required and cannot be empty."
+            }
+
+        rule_name = rule_name.strip()
+        try:
+            headers = wsutils.create_header(ctx)
+            response = wsutils.get(
+                path=wsutils.build_api_url(endpoint=constants.URL_FETCH_RULES),
+                params={"name": rule_name},
+                header=headers
+            )
+            if rule.is_valid_array(response, "items"):
+                return {
+                    "success": True,
+                    "rule_name": rule_name,
+                    "rule_structure": response["items"][0],
+                    "message": f"Catalog rule '{rule_name}' retrieved successfully"
+                }
+
+            return {
+                "success": False,
+                "rule_name": rule_name,
+                "error": f"Catalog rule '{rule_name}' not found"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "rule_name": rule_name,
+                "error": f"Failed to fetch catalog rule '{rule_name}': {e}"
+            }
+
+    @mcp.tool()
     def fetch_cc_rule_by_name(rule_name: str, ctx: Context | None = None) -> dict:
         """
         Fetch rule details by rule name from the **compliancecow**.
