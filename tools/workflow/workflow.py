@@ -1230,7 +1230,7 @@ async def trigger_workflow(
 
 
 @mcp.tool(annotations=utils.tool_annotations("List Workflow Blueprints", read_only = True))
-async def list_workflow_blueprints(name: str = None, ctx: Context | None = None) -> list | str:
+async def list_workflow_blueprints(name: str = None, ctx: Context | None = None) -> dict:
     """
     Lists the available workflow blueprints that can be used to create workflows in the system. Returns predefined workflow configurations that are not yet instantiated as workflows.
    
